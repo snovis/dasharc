@@ -14,5 +14,6 @@ export function signOut() {
 }
 
 export function onAuthChange(callback) {
+  if (!auth) return () => {}
   return onAuthStateChanged(auth, callback)
 }
