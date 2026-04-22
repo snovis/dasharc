@@ -1,8 +1,8 @@
 # Walk: n8n → Firebase Bridge Plan
 
 Started: 2026-04-22 11:01 · Branch: n8n-firebase-bridge · Start commit: 6c3ca34
-Status: in progress
-Totals: 8 items · 1 done · 0 rejected · 0 deferred · 0 modified · 7 unresolved
+Status: closed (superseded by Synthflow direct-API pivot)
+Totals: 8 items · 1 done · 0 rejected · 7 deferred · 0 modified · 0 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -32,7 +32,7 @@ Schema commits to a `calls/{call_id}` primary key using Synthflow's `call_id`, w
 **Resolution**
 done · Schema doc drafted at docs/FIRESTORE_SCHEMA.md (215 lines). Scott reviewed and approved. "No Value" clarification folded in.
 
-### 2. Build the ingest function — unresolved
+### 2. Build the ingest function — deferred
 
 **Recommendation**
 - `/api/ingest.js` — Vercel serverless, Firebase client SDK, signs in as ingest user, merge-writes to Firestore
@@ -40,10 +40,12 @@ done · Schema doc drafted at docs/FIRESTORE_SCHEMA.md (215 lines). Scott review
 - Minimal `package.json` changes (add a couple deps if needed)
 
 **Discussion**
+Built to completion before the pivot landed: `api/ingest.js`, `scripts/test-ingest.mjs`, `.env.example` updates, `eslint.config.js` Node-env addition, `package.json` test script. Syntax + lint + build verified. Not verified against a live Firebase project — we never reached that step.
 
 **Resolution**
+deferred · Code is committed (see commit c78ad2d) but unused. Substantial chunks are reusable in the new Synthflow-direct branch: the Firebase Auth sign-in pattern, status mapping, and `setDoc({merge:true})` mechanics all carry over. Payload duality and X-Ingest-Secret auth layer are dead weight in the new model. Revisit when designing the polling sync function.
 
-### 3. Wire the frontend to real Firestore — unresolved
+### 3. Wire the frontend to real Firestore — deferred
 
 **Recommendation**
 - Fill in the Firestore queries in `src/hooks/useCallData.js` (the TODOs that are already marked)
@@ -54,8 +56,9 @@ done · Schema doc drafted at docs/FIRESTORE_SCHEMA.md (215 lines). Scott review
 **Discussion**
 
 **Resolution**
+deferred · Still needed, just in the new branch. Firestore doc shape is unchanged, so the queries and campaign-axis pivot carry over verbatim. No work here was done — carry forward as-is.
 
-### 4. Migrate auth to Google OAuth + allowlist — unresolved
+### 4. Migrate auth to Google OAuth + allowlist — deferred
 
 **Recommendation**
 Replace the email/password LoginPage with a "Sign in with Google" button (Firebase Auth Google provider). Add an authorized-email allowlist so only approved users (Jason, Scott, Ember) can see the report — anyone else gets signed out with a "not authorized" message.
@@ -65,8 +68,9 @@ Design decision still open inside this item: store the allowlist as a Firestore 
 **Discussion**
 
 **Resolution**
+deferred · Still needed in the new branch. Completely independent of the data-source pivot. The flag raised during item 1 amend pass still applies — the schema doc's security rule assumes Firestore-collection allowlist; reconcile when picking up this item. Carry forward as-is.
 
-### 5. Firebase setup (Scott does, Claude walks through) — unresolved
+### 5. Firebase setup (Scott does, Claude walks through) — deferred
 
 **Recommendation**
 - Create the Firebase project (if not done yet)
@@ -78,8 +82,9 @@ Design decision still open inside this item: store the allowlist as a Firestore 
 **Discussion**
 
 **Resolution**
+deferred · Still needed in the new branch. The ingest user is probably still the right mechanism — the sync function running on Vercel needs *some* Firebase identity to write to Firestore, and a dedicated auth user is still the simplest answer. Carry forward mostly as-is.
 
-### 6. Vercel env + deploy (Scott does, Claude walks through) — unresolved
+### 6. Vercel env + deploy (Scott does, Claude walks through) — deferred
 
 **Recommendation**
 - Add `INGEST_EMAIL`, `INGEST_PASSWORD`, `INGEST_SECRET` (Claude generates the secret)
@@ -90,8 +95,9 @@ Design decision still open inside this item: store the allowlist as a Firestore 
 **Discussion**
 
 **Resolution**
+deferred · Env vars mostly still apply in new branch, but: `INGEST_SECRET` is likely unnecessary (no external caller), and we'll gain a `SYNTHFLOW_API_KEY` and `VERCEL_CRON_SECRET` (or similar) in its place. Carry forward with edits.
 
-### 7. n8n edits (Scott does, Claude gives exact node configs) — unresolved
+### 7. n8n edits (Scott does, Claude gives exact node configs) — deferred
 
 **Recommendation**
 - Post-call workflow: HTTP Request node in parallel with SF PATCH → POSTs to `/api/ingest`
@@ -101,8 +107,9 @@ Design decision still open inside this item: store the allowlist as a Firestore 
 **Discussion**
 
 **Resolution**
+deferred · Killed by the pivot. No n8n changes needed — the whole point of polling Synthflow directly is that we stop depending on the client's n8n instance. Do NOT carry forward; the new branch replaces this item with a Vercel cron job.
 
-### 8. End-to-end verification (together) — unresolved
+### 8. End-to-end verification (together) — deferred
 
 **Recommendation**
 - Run the initiator manually with 2 contacts
@@ -112,6 +119,7 @@ Design decision still open inside this item: store the allowlist as a Firestore 
 **Discussion**
 
 **Resolution**
+deferred · Still needed in the new branch but shape changes: instead of "run n8n manually," we'll manually trigger the Vercel cron function (or wait for its first scheduled run) and watch Firestore + dashboard. Conceptually the same verification, different trigger.
 
 ## Flags
 
@@ -125,4 +133,23 @@ Never auto-rewrites items; just a heads-up for when we get there.
 
 ## Summary
 
-<!-- Written by /rsd:walk-done. Empty while the walk is in progress. -->
+**Closed early due to architecture pivot** — mid-walk (after item 2 was built), Scott discovered that Synthflow exposes a direct API returning all the call data we were trying to sniff from n8n workflows. That obsoletes most of this plan.
+
+**Outcome: 1 done, 7 deferred, 0 rejected, 0 modified.**
+
+- **Item 1 (schema)** — done. Doc shape is source-agnostic; survives the pivot intact.
+- **Item 2 (ingest function)** — built to completion and committed, but unused. ~75% of the code is reusable in the new branch (auth pattern, status mapping, merge-write). The HTTP-ingress and initiated/completed payload duality are dead weight in a polling model.
+- **Items 3, 4, 5, 6, 8** — still relevant; carry forward to new branch with minor edits noted in each resolution.
+- **Item 7 (n8n edits)** — killed outright. The whole point of the pivot is to stop depending on the client's n8n instance.
+
+**Lessons:**
+
+1. **Ask about API availability earlier.** We spent ~4 commits designing a bridge that would be unnecessary if we'd asked "does Synthflow have a reporting API?" before building. Worth adding to the open-questions checklist for future integrations.
+2. **The schema-first discipline paid off.** Even though the *transport* changed completely, the schema doc from item 1 is 100% reusable. The 30 minutes we spent pinning the doc shape saved hours of re-design.
+3. **Amend flags worked.** The flag raised on item 4 during item 1's amend pass (security rule pre-assumption) is still relevant in the new branch — it travels with the deferred item cleanly.
+
+**Follow-up:**
+
+- See `.rsd/docs/2026-04-22-1140-pivot-to-synthflow-direct.md` for the pivot rationale, what survives, and open questions for the new branch.
+- New branch name pending — Scott's pick: `synthflow-direct` or `synthflow-api-sync`.
+- Consider cherry-picking `docs/FIRESTORE_SCHEMA.md` to `main` before starting the new branch so the schema lives on the trunk.
