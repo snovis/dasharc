@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 11:01 · Branch: n8n-firebase-bridge · Start commit: 6c3ca34
 Status: in progress
-Totals: 8 items · 0 done · 0 rejected · 0 deferred · 0 modified · 8 unresolved
+Totals: 8 items · 1 done · 0 rejected · 0 deferred · 0 modified · 7 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -12,7 +12,7 @@ affected them. Flags are surfaced in chat and recorded inline, not auto-edited.
 
 ## Items
 
-### 1. Lock the data contract — unresolved
+### 1. Lock the data contract — done
 
 **Recommendation**
 Write `docs/FIRESTORE_SCHEMA.md` pinning down:
@@ -25,8 +25,12 @@ Write `docs/FIRESTORE_SCHEMA.md` pinning down:
 Everything downstream depends on this. Show Scott before building against it.
 
 **Discussion**
+Scott's clarification: "No Value" === Failed for MVP. Folded into the status taxonomy section of the doc — they're one bucket, with a note to add a sub-status later if granularity is requested.
+
+Schema commits to a `calls/{call_id}` primary key using Synthflow's `call_id`, with a noted fallback to a UUID-in-custom-variable if Synthflow's `POST /v2/calls` response doesn't include it (first n8n test run decides). Security rule drafted with placeholders for `<INGEST_USER_UID>` (filled during item 5) and assumes an `authorized_users/{uid}` Firestore collection for the reader allowlist (design finalized in item 4).
 
 **Resolution**
+done · Schema doc drafted at docs/FIRESTORE_SCHEMA.md (215 lines). Scott reviewed and approved. "No Value" clarification folded in.
 
 ### 2. Build the ingest function — unresolved
 
@@ -116,6 +120,8 @@ Amend-pass notes surface here when a resolution on one item affects another.
 Format: `item N: why flagged · raised after item M resolved`.
 Never auto-rewrites items; just a heads-up for when we get there.
 -->
+
+- item 4: schema doc's security rule pre-assumes the `authorized_users/{uid}` Firestore-collection approach for the allowlist. Item 4 still lists env-var vs. Firestore as an open design choice — when resolving, confirm Firestore-collection approach or revise the schema's security rule. · raised after item 1 resolved
 
 ## Summary
 
