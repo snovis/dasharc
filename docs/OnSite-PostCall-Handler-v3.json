@@ -1,0 +1,335 @@
+{
+  "name": "OnSite-PostCall-Handler-v3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onsite-postcall",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7182e504-3bb8-465a-8d65-a4a1337c817b",
+      "name": "PostCall Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2944,
+        96
+      ],
+      "webhookId": "onsite-postcall-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"received\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "646ae2d1-8bb5-4752-9962-2f394e317317",
+      "name": "Respond 200 Immediately",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2704,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "Respond 200 BEFORE SF update. Synthflow doesn't wait. L-002 pattern."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('PostCall Webhook').first().json.body;\n\nconst callStatus = body.call?.status || body.status || 'unknown';\nconst callId = body.call?.call_id || '';\nconst duration = body.call?.duration || 0;\nconst endReason = body.call?.end_call_reason || '';\nconst rawTranscript = body.call?.transcript || '';\nconst transcript = rawTranscript.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n').replace(/\"/g, \"'\").replace(/\\n/g, '\\\\n').substring(0, 32000);\nconst recordingUrl = body.call?.recording_url || '';\nconst phone = body.lead?.phone_number || '';\n\nconst customVars = Array.isArray(body.custom_variables) ? body.custom_variables : [];\nconst callVars = Array.isArray(body.call?.custom_variables) ? body.call.custom_variables : [];\nlet leadId = '';\nlet campaign = '';\nfor (const v of [...customVars, ...callVars]) {\n  if (v.key === 'leadId' && !leadId) leadId = v.value || '';\n  if (v.key === 'campaign' && !campaign) campaign = v.value || '';\n}\n\nlet sfStatus = 'Failed';\nswitch(callStatus) {\n  case 'hangup_on_voicemail': sfStatus = 'Voicemail';  break;\n  case 'completed':           sfStatus = 'Completed';  break;\n  case 'no-answer':           sfStatus = 'No_Answer';  break;\n  case 'no_answer':           sfStatus = 'No_Answer';  break;\n  case 'busy':                sfStatus = 'Busy';       break;\n  case 'failed':              sfStatus = 'Failed';     break;\n  default:                    sfStatus = 'Failed';     break;\n}\n\nconst startTime = body.call?.start_time || '';\nconst callDate = startTime ? startTime.split('T')[0] : new Date().toISOString().split('T')[0];\n\nconst phoneDigits = phone.replace(/\\D/g, '');\nconst phoneSearch = phoneDigits.slice(-10);\n\nconsole.log('PostCall — raw:', callStatus, '-> sf:', sfStatus, '| leadId:', leadId, '| phone:', phone);\n\nreturn [{\n  json: {\n    callId, callStatus, sfStatus, transcript, recordingUrl,\n    leadId, campaign, phone, phoneSearch, callDate, duration, endReason\n  }\n}];"
+      },
+      "id": "e4de964c-bfe6-495f-b0e6-7e926cfefd20",
+      "name": "Extract Call Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2464,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "SalesARC proven: body.call.* and body.lead.*. hangup_on_voicemail->Voicemail. leadId from custom_variables (root + call level). Transcript 32000 chars. Date YYYY-MM-DD (L-006)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.leadId }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "1e3b7b99-5686-4954-bd12-eaa8e9173280",
+      "name": "Has leadId?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2224,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "typeVersion 1 — L-034. TRUE: direct SF PATCH. FALSE: SOQL fallback by phone."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://onsitemedical2.my.salesforce.com/services/data/v59.0/sobjects/Lead/{{ $('Extract Call Data').item.json.leadId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"AI_Call_Status__c\": \"{{ $(\"Extract Call Data\").item.json.sfStatus }}\",\n  \"AI_Call_Date__c\": \"{{ $(\"Extract Call Data\").item.json.callDate }}\",\n  \"AI_Agent_Notes__c\": \"{{ $(\"Extract Call Data\").item.json.transcript }}\\n\\nRecording: {{ $(\"Extract Call Data\").item.json.recordingUrl }}\"\n}",
+        "options": {}
+      },
+      "id": "e6bf2004-edf0-4626-b420-f0b59c900b0e",
+      "name": "SF PATCH Lead (by leadId)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1984,
+        -64
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Direct SF PATCH when leadId is available. continueErrorOutput: L-002. Recording_URL__c — verify field exists (Q5). Date = YYYY-MM-DD: L-006."
+    },
+    {
+      "parameters": {
+        "url": "=https://onsitemedical2.my.salesforce.com/services/data/v59.0/query?q={{ encodeURIComponent(\"SELECT Id, Phone, FirstName, LastName FROM Lead WHERE IsConverted = false AND Phone_E164__c = '+1\" + $('Extract Call Data').item.json.phoneSearch + \"' LIMIT 1\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "options": {}
+      },
+      "id": "d08c31a9-44ac-4399-b843-d926a087da3b",
+      "name": "SOQL Fallback by Phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1984,
+        256
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Exact match: Phone_E164__c = +1{last10}. IsConverted=false. Fallback when leadId empty (Synthflow does not return custom_variables in webhook)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.totalSize }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "8d5cd3bc-4e2b-4c96-b0d7-b2d85ea5c36b",
+      "name": "SOQL Found Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1744,
+        256
+      ],
+      "notesInFlow": true,
+      "notes": "typeVersion 1 (L-034). Check if SOQL fallback found a lead."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://onsitemedical2.my.salesforce.com/services/data/v59.0/sobjects/Lead/{{ $json.records[0].Id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"AI_Call_Status__c\": \"{{ $(\"Extract Call Data\").item.json.sfStatus }}\",\n  \"AI_Call_Date__c\": \"{{ $(\"Extract Call Data\").item.json.callDate }}\",\n  \"AI_Agent_Notes__c\": \"{{ $(\"Extract Call Data\").item.json.transcript }}\\n\\nRecording: {{ $(\"Extract Call Data\").item.json.recordingUrl }}\"\n}",
+        "options": {}
+      },
+      "id": "c918e87d-4476-4861-a9d4-20d683c9dd20",
+      "name": "SF PATCH Lead (by SOQL result)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1504,
+        176
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "SOQL fallback path. Uses records[0].Id from SOQL result. Same fields as direct PATCH."
+    },
+    {
+      "parameters": {},
+      "id": "a4f82fdd-8835-4b2c-956c-8e6a345d1404",
+      "name": "Lead Not Found — Log",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1504,
+        416
+      ],
+      "notesInFlow": true,
+      "notes": "SOQL fallback returned 0 results. Call data not saved — logged in execution history. Phone may be missing or format mismatch."
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconst leadId = $(\"Extract Call Data\").item.json.leadId || \"unknown\";\nconst phone = $(\"Extract Call Data\").item.json.phone || \"unknown\";\nconsole.error(\"[SF PATCH ERROR] Lead:\", leadId, \"| Phone:\", phone, \"| Error:\", JSON.stringify(err));\nreturn [{ json: { patchError: true, leadId, phone, details: err } }];"
+      },
+      "id": "d57b997f-53ad-4e8f-b1b1-e644d81129da",
+      "name": "Log SF Patch Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        16
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "PostCall Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Immediately",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200 Immediately": {
+      "main": [
+        [
+          {
+            "node": "Extract Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Call Data": {
+      "main": [
+        [
+          {
+            "node": "Has leadId?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has leadId?": {
+      "main": [
+        [
+          {
+            "node": "SF PATCH Lead (by leadId)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SOQL Fallback by Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SOQL Fallback by Phone": {
+      "main": [
+        [
+          {
+            "node": "SOQL Found Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SOQL Found Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SOQL Found Lead?": {
+      "main": [
+        [
+          {
+            "node": "SF PATCH Lead (by SOQL result)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lead Not Found — Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SF PATCH Lead (by leadId)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Log SF Patch Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SF PATCH Lead (by SOQL result)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Log SF Patch Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "2d4969db-e06b-41c2-b28a-c43e2e527bdd",
+  "meta": {
+    "instanceId": "a33a32ee8029e7caa53097a095a9db699cf2713469105542cab2e3ee74afdc3a"
+  },
+  "id": "TlAEdODxiJQBBhvQ",
+  "tags": []
+}

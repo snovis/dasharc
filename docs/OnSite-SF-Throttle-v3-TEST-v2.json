@@ -1,0 +1,633 @@
+{
+  "name": "OnSite-SF-Throttle-v3-TEST-v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "242f1d59-169e-4c83-931d-2fe1d9a43aae",
+      "name": "Schedule Weekdays 9AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -960,
+        96
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "3716d78f-6808-492b-82bc-95a5bf65f7dd",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// F4 FIX: Reset static data to prevent stale data from crashed runs\nconst staticData = $getWorkflowStaticData('global');\nstaticData.allRecords = '[]';\nconsole.log('[RESET] Static data cleared');\nreturn [{ json: { reset: true } }];"
+      },
+      "id": "5f3947ac-f587-48e4-807c-ee66e66c869c",
+      "name": "Reset Accumulator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://onsitemedical2.my.salesforce.com/services/data/v59.0/query/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "SELECT Id, Phone, FirstName, LastName, Company, State, AI_Call_Status__c, AI_Call_Date__c, AI_Campaign__c FROM Lead WHERE Phone != null AND (AI_Call_Status__c = null OR AI_Call_Status__c = 'Not_Called') AND Status IN ('New', 'Qualified') AND IsConverted = false AND AI_Call_Engage__c = true ORDER BY CreatedDate ASC"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "31a37497-5684-48b6-be9e-1d196a632929",
+      "name": "SOQL Get Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        192
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconsole.error('[SOQL ERROR] Failed to query Salesforce:', JSON.stringify(err));\nreturn [{ json: { error: true, stage: 'SOQL_QUERY', details: err } }];"
+      },
+      "id": "bad5a3f6-eca1-423c-85bd-841237b6d4f0",
+      "name": "Log SOQL Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentBatch = $input.first().json;\n\nlet allRecords = [];\ntry {\n  allRecords = JSON.parse($getWorkflowStaticData('global').allRecords || '[]');\n} catch(e) {\n  allRecords = [];\n}\n\nif (currentBatch.records && currentBatch.records.length > 0) {\n  allRecords = allRecords.concat(currentBatch.records);\n}\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.allRecords = JSON.stringify(allRecords);\n\nreturn [{\n  json: {\n    totalSize: currentBatch.totalSize,\n    done: currentBatch.done,\n    nextRecordsUrl: currentBatch.nextRecordsUrl || null,\n    recordsCollected: allRecords.length,\n    currentBatchSize: currentBatch.records ? currentBatch.records.length : 0\n  }\n}];"
+      },
+      "id": "2934e40b-a26f-4d6c-a1df-27c582766469",
+      "name": "Accumulate Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "pagination-check",
+              "leftValue": "={{ $json.done }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "daf904f3-0211-4c98-9a76-bf00e3b1391d",
+      "name": "More Pages",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://onsitemedical2.my.salesforce.com{{ $json.nextRecordsUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "options": {}
+      },
+      "id": "c6360fa3-b9e3-4be0-99f7-1c829c7e8189",
+      "name": "SOQL Next Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconsole.error('[PAGINATION ERROR] Failed to fetch next page:', JSON.stringify(err));\n// Continue to Process Leads with whatever we have so far\nreturn [{ json: { paginationError: true, details: err } }];"
+      },
+      "id": "f6604370-b04f-452b-8ddf-d20b14885bf5",
+      "name": "Log Pagination Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst allRecords = JSON.parse(staticData.allRecords || '[]');\nstaticData.allRecords = '[]';\n\nconsole.log('Total records from SF:', allRecords.length);\n\nconst AZ_CODES = new Set([\"480\", \"520\", \"602\", \"623\", \"928\"]);\nconst TX_CODES = new Set([\"210\", \"214\", \"254\", \"281\", \"325\", \"361\", \"409\", \"430\", \"432\", \"469\", \"512\", \"682\", \"713\", \"726\", \"737\", \"806\", \"817\", \"830\", \"832\", \"903\", \"915\", \"936\", \"940\", \"956\", \"972\", \"979\"]);\n\nlet skippedInvalidFormat = 0;\nlet skippedDualPhone = 0;\nlet skippedUnknownRegion = 0;\nconst invalidPhoneDetails = [];\nconst validContacts = [];\n\nfor (const lead of allRecords) {\n  let phone = lead.Phone || '';\n  \n  // Handle dual phones - take first\n  if (phone.includes('/')) {\n    phone = phone.split('/')[0].trim();\n    skippedDualPhone++;\n  }\n  \n  // Strip everything except digits and +\n  phone = phone.replace(/[^\\d+]/g, '');\n  \n  // Normalize to E.164\n  if (/^\\d{10}$/.test(phone)) {\n    phone = '+1' + phone;\n  } else if (/^1\\d{10}$/.test(phone)) {\n    phone = '+' + phone;\n  }\n  \n  // Validate E.164 US\n  if (!/^\\+1[2-9]\\d{9}$/.test(phone)) {\n    skippedInvalidFormat++;\n    invalidPhoneDetails.push({\n      name: (lead.FirstName || '') + ' ' + (lead.LastName || ''),\n      original: lead.Phone,\n      normalized: phone,\n      id: lead.Id\n    });\n    continue;\n  }\n  \n  // Area code -> campaign\n  const areaCode = phone.substring(2, 5);\n  const state = (lead.State || '').toUpperCase().trim();\n  \n  let campaign = '';\n  if (state === 'AZ' || state === 'ARIZONA' || AZ_CODES.has(areaCode)) {\n    campaign = 'AZ_CrossSell';\n  } else if (state === 'TX' || state === 'TEXAS' || TX_CODES.has(areaCode)) {\n    campaign = 'TX_ColdOutreach';\n  } else {\n    // F3 FIX: Skip UNKNOWN — don't call leads outside AZ/TX\n    skippedUnknownRegion++;\n    console.log('[SKIP] Unknown region:', lead.FirstName, lead.LastName, '| Phone:', lead.Phone, '| Area:', areaCode, '| State:', lead.State);\n    continue;\n  }\n  \n  validContacts.push({\n    json: {\n      id: lead.Id,\n      phone: phone,\n      firstName: lead.FirstName || '',\n      lastName: lead.LastName || '',\n      company: lead.Company || '',\n      state: lead.State || '',\n      areaCode: areaCode,\n      campaign: campaign\n    }\n  });\n}\n\nconst azCount = validContacts.filter(c => c.json.campaign === 'AZ_CrossSell').length;\nconst txCount = validContacts.filter(c => c.json.campaign === 'TX_ColdOutreach').length;\n\nconsole.log('=== PROCESSING SUMMARY ===');\nconsole.log('Total from SF:', allRecords.length);\nconsole.log('Dual phones (took first):', skippedDualPhone);\nconsole.log('Skipped invalid format:', skippedInvalidFormat);\nconsole.log('Skipped unknown region:', skippedUnknownRegion);\nconsole.log('Valid contacts:', validContacts.length);\nconsole.log('  AZ Cross-Sell:', azCount);\nconsole.log('  TX Cold Outreach:', txCount);\nif (invalidPhoneDetails.length > 0) {\n  console.log('Invalid phones:', JSON.stringify(invalidPhoneDetails));\n}\n\nif (validContacts.length === 0) {\n  return [{ json: { noContacts: true } }];\n}\n\nreturn validContacts;"
+      },
+      "id": "fac6a7de-f99a-4d29-a6bb-889d2b0c191a",
+      "name": "Process Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-contacts",
+              "leftValue": "={{ $json.noContacts }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8e624cfb-a309-41db-a8fd-2f3706a53e11",
+      "name": "If Has Contacts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "636efab9-944e-4df9-9360-184cd8eedf3c",
+      "name": "Loop Over Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        720,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "87795e4b-c418-4fe0-b22a-df2e15bdcff9",
+      "name": "Wait 2 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        192
+      ],
+      "webhookId": "2bc752b4-9d23-43ce-ab26-d0eecb26d2d5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.synthflow.ai/v2/calls",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone\": \"{{ $json.phone }}\",\n  \"model_id\": \"0df733c4-a8fb-4d14-a12a-55fc62396bc7\",\n  \"name\": \"{{ $json.firstName }} {{ $json.lastName }}\",\n  \"custom_variables\": [\n    {\"key\": \"first_name\", \"value\": \"{{ $json.firstName }}\"},\n    {\"key\": \"company_name\", \"value\": \"{{ $json.company }}\"},\n    {\"key\": \"campaign\", \"value\": \"{{ $json.campaign }}\"},\n    {\"key\": \"enrollment_link\", \"value\": \"https://onsite-medical.net/enrollment/\"}\n  ],\n  \"external_webhook_url\": \"https://salesarcsolutions.app.n8n.cloud/webhook/onsite-postcall\"\n}",
+        "options": {}
+      },
+      "id": "2c4ddd51-b89d-483a-ad77-38d1b3e52766",
+      "name": "Synthflow API Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ef4OuEgEIr9rpFgd",
+          "name": "Synthflow API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://onsitemedical2.my.salesforce.com/services/data/v59.0/sobjects/Lead/{{ $('Loop Over Contacts').item.json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"AI_Call_Status__c\": \"Called\",\n  \"AI_Call_Date__c\": \"{{ $now.format('yyyy-MM-dd') }}\",\n  \"AI_Campaign__c\": \"{{ $('Loop Over Contacts').item.json.campaign }}\",\n  \"Phone_E164__c\": \"{{ $('Loop Over Contacts').item.json.phone }}\"\n}",
+        "options": {}
+      },
+      "id": "88571ef3-9524-4e63-a8bf-cce8cf2e1c90",
+      "name": "Update SF Called",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        96
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://onsitemedical2.my.salesforce.com/services/data/v59.0/sobjects/Lead/{{ $('Loop Over Contacts').item.json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"AI_Call_Status__c\": \"Failed\",\n  \"AI_Call_Date__c\": \"{{ $now.format('yyyy-MM-dd') }}\",\n  \"AI_Campaign__c\": \"{{ $('Loop Over Contacts').item.json.campaign }}\",\n  \"Phone_E164__c\": \"{{ $('Loop Over Contacts').item.json.phone }}\"\n}",
+        "options": {}
+      },
+      "id": "b31c757f-1ce8-4ea4-a45b-9c3fe3a62d40",
+      "name": "Update SF Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        304
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "9neM7zu8kZegg9fH",
+          "name": "Salesforce account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconst leadId = $('Loop Over Contacts').item.json.id || 'unknown';\nconsole.error('[SF UPDATE ERROR] Lead:', leadId, '| Error:', JSON.stringify(err));\nreturn [{ json: { updateError: true, leadId: leadId, details: err } }];"
+      },
+      "id": "f76b40e4-6656-423d-ace7-e6486e385c22",
+      "name": "Log Update Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1c8fd21e-6efb-4810-9554-3fd3c1a1665d",
+      "name": "All Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        464
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b58f2971-db6a-480e-af8f-2fedf986b7d7",
+      "name": "No Contacts",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 2
+      },
+      "id": "e557bdd1-5046-4ad3-aa4b-35c1a58be125",
+      "name": "Limit 2 TEST",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        736
+      ],
+      "notesInFlow": true,
+      "notes": "TEST ONLY — remove for production"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Weekdays 9AM": {
+      "main": [
+        [
+          {
+            "node": "Reset Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Reset Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Accumulator": {
+      "main": [
+        [
+          {
+            "node": "SOQL Get Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SOQL Get Leads": {
+      "main": [
+        [
+          {
+            "node": "Accumulate Records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log SOQL Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accumulate Records": {
+      "main": [
+        [
+          {
+            "node": "More Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Pages": {
+      "main": [
+        [
+          {
+            "node": "SOQL Next Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SOQL Next Page": {
+      "main": [
+        [
+          {
+            "node": "Accumulate Records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Pagination Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Pagination Error": {
+      "main": [
+        [
+          {
+            "node": "Process Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Leads": {
+      "main": [
+        [
+          {
+            "node": "If Has Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Contacts": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Contacts": {
+      "main": [
+        [
+          {
+            "node": "All Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 2 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Synthflow API Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthflow API Call": {
+      "main": [
+        [
+          {
+            "node": "Update SF Called",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update SF Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SF Called": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Update Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SF Failed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Update Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Update Error": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit 2 TEST": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "de763253-440e-4ee9-b719-67d69d046b99",
+  "meta": {
+    "instanceId": "a33a32ee8029e7caa53097a095a9db699cf2713469105542cab2e3ee74afdc3a"
+  },
+  "id": "ICtKmIYwap4Asizp",
+  "tags": []
+}
