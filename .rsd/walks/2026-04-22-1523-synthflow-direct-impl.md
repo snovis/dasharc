@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 9 done · 0 rejected · 1 deferred · 0 modified · 6 unresolved
+Totals: 16 items · 10 done · 0 rejected · 1 deferred · 0 modified · 5 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -122,14 +122,16 @@ Commit `9452c81`. New hooks talking to the `/api/*` proxies: `useAgents()` (10 m
 **Resolution**
 done · new hooks shipped + paginating correctly; transitional stubs keep build passing; page rewiring is item 11's scope.
 
-### 11. Update charts + `AgentDetailPage.jsx` for Synthflow call shape — unresolved
+### 11. Update charts + `AgentDetailPage.jsx` for Synthflow call shape — done
 
 **Recommendation**
 Map Synthflow's call object fields (whatever #1 reveals) into the existing chart data structures. Update `AgentDetailPage.jsx` call log table columns to match Synthflow's available fields (timestamp, duration, status, transcript preview, recording link). Keep the UI shape; just change the sourcing.
 
 **Discussion**
+Commit `c60bdbd` (8 files, +595/-265). Scope expanded beyond the original recommendation because the old ActivityLeaderboard didn't translate (Synthflow is calls-only). New `src/lib/synthflow.js` centralizes status normalization (6 buckets: completed / left_voicemail / hangup_on_voicemail / no_answer / failed / other), transcript parsing (handles `\nhuman:/\nassistant:` format + orphan text), timestamp helpers (ISO-without-TZ treated as UTC), and aggregators (per-agent + per-day). New `CallsOverTime` chart replaces ActivityLeaderboard. DashboardPage adapts layout to n=1 vs n>1 agents. CallDetailPage drops all "pending Synthflow integration" placeholders — now renders HTML5 `<audio>`, chat-bubble transcript, and a rich AI judge_results card (8 key booleans with colored indicators + collapsible detailed feedback). Transitional stubs from item 10 removed. `useMockData` in `config/app.js` is now orphaned (defined but unread) — mark for cleanup at item 15. Build clean (643 modules, 635 KB bundle — still bloated by dead firebase until item 15).
 
 **Resolution**
+done · full UI rewired; charts/detail pages consume Synthflow shape; interactive verification deferred to item 14.
 
 ### 12. Update `.env.example` — unresolved
 
@@ -192,6 +194,7 @@ Never auto-rewrites items; just a heads-up for when we get there.
 - item 15: `src/firebase/` is now fully unreferenced in the active code path (verified via grep after item 8). Safe to delete during final cleanup — no remaining `import` statements to break. · raised after item 8 resolved
 - item 11: item 10 left three transitional stub exports in `src/hooks/useCallData.js` (`useCallOutcomes`, `useActivityLeaderboard`, `useAgentCalls`) that return `{isPending: true}` so the build passes. Item 11 should delete these after rewiring the page components to the new hooks — or they'll hang the UI on loading forever. · raised after item 10 resolved
 - item 15: `src/mock/callData.js` is now fully unreferenced by the active code (useCallData no longer imports from it after item 10). Safe to delete during final cleanup. · raised after item 10 resolved
+- item 15: `appConfig.useMockData` in `src/config/app.js` is defined but no longer read anywhere (last consumers removed in item 11). Remove the field entry + the `VITE_USE_MOCK_DATA` env var during final cleanup. · raised after item 11 resolved
 
 ## Summary
 
