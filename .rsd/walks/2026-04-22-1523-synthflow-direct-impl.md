@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 6 done · 0 rejected · 0 deferred · 0 modified · 10 unresolved
+Totals: 16 items · 7 done · 0 rejected · 0 deferred · 0 modified · 9 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -78,14 +78,16 @@ done · handler committed; Synthflow fetch+filter+sanitize verified; auth happy 
 **Resolution**
 done · handler committed; full pipeline verified live; auth happy path deferred to item 14.
 
-### 7. Create `api/call.js` — unresolved
+### 7. Create `api/call.js` — done
 
 **Recommendation**
 `GET /api/call?id=<callId>` — verify token, fetch single-call detail (transcript + recording URL) from Synthflow. Additionally verify the call belongs to an agent in `AGENT_IDS` to prevent callers pulling call data outside their allowed agent set.
 
 **Discussion**
+Resolved the prior flag by probing: correct endpoint is `GET /v2/calls/{call_id}` (same REST pattern as `/v2/assistants/{id}`). Returns `{status, response: {calls: [single]}}`. Single-call response has 25 fields vs list-calls' 33 — slightly trimmed but transcript + recording_url both present. Synthflow returns 404 for both bogus UUIDs and malformed IDs. 78-line handler committed at `7be1ffc`. Security decision: cross-agent calls return 404 (not 403) to avoid leaking existence of calls on other agents — verified live using a real call_id belonging to the Jessica agent (not in AGENT_IDS) and confirmed our handler 404s it even though Synthflow itself returned 200. `encodeURIComponent(id)` guards against URL injection. Strips `telephony_sip_headers` for consistency with list-calls handler. Returns unwrapped `{ call }`. Smoke-tested all failure paths + upstream pipeline (valid→200, bogus→404, cross-agent→404).
 
 **Resolution**
+done · endpoint probed + handler committed; cross-agent 404 verified live; auth happy path deferred to item 14.
 
 ### 8. Rewrite `src/pages/LoginPage.jsx` with Google GIS — unresolved
 
