@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 8 done · 0 rejected · 0 deferred · 0 modified · 8 unresolved
+Totals: 16 items · 8 done · 0 rejected · 1 deferred · 0 modified · 7 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -100,14 +100,16 @@ Commit `38b682f` touched 7 files because LoginPage + useAuth are tightly coupled
 **Resolution**
 done · LoginPage + AuthContext shipped; build clean; Firebase unreferenced; interactive test deferred to item 14.
 
-### 9. Rewrite `src/hooks/useAuth.js` — unresolved
+### 9. Rewrite `src/hooks/useAuth.js` — deferred
 
 **Recommendation**
 Store the Google ID token (in-memory; optionally sessionStorage for refresh survivability). Expose `idToken`, `user` (email, name, picture from the JWT payload), `signIn`, `signOut`. Implement silent refresh before the 1hr expiry using GIS's auto-select / prompt flow so open dashboards don't suddenly 401. Drop all Firebase Auth references.
 
 **Discussion**
+Most of this scope was absorbed into item 8: sessionStorage-backed token storage, `useAuth` + `AuthProvider` context, JWT decoding for user info, `signIn`/`signOut`, all Firebase Auth references removed. The remaining piece is **silent refresh before 1hr expiry** — deferred so the item 14 smoke test can validate the baseline auth flow without silent-refresh plumbing in the mix. Worst-case UX without this: a user leaving the tab open >1hr hits a stale-token error and reloads to re-sign-in. Revisit if the smoke test shows token expiry during demos is disruptive; otherwise log as known rough-edge for a follow-up walk. Silent refresh scope (30-60 LOC + edge cases): schedule a timer N min before `exp`, call `google.accounts.id.prompt()`, feed the fresh token back through `signIn()`; handle prompt-failure gracefully (stale token eventually 401s → signOut + redirect).
 
 **Resolution**
+deferred · baseline auth from item 8 is sufficient for smoke test; revisit after item 14 validates the happy path.
 
 ### 10. Rewrite `src/hooks/useCallData.js` — unresolved
 
