@@ -1,57 +1,94 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  mockCalls,
-  filterByPeriod,
-  aggregateCallOutcomes,
-  aggregateActivity,
-  getAgentCalls,
-} from '../mock/callData'
-import appConfig from '../config/app'
+import { useAuth } from './useAuth'
 
-// When VITE_USE_MOCK_DATA=false, replace these fetchers with Firestore queries.
-
-async function fetchCallsForPeriod(period) {
-  if (appConfig.useMockData) {
-    await new Promise(r => setTimeout(r, 300)) // simulate network
-    return filterByPeriod(mockCalls, period)
+async function authedFetch(url, idToken) {
+  if (!idToken) throw new Error('Not authenticated')
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(body.error || `HTTP ${res.status}`)
+    err.status = res.status
+    err.body = body
+    throw err
   }
-  // TODO: Firestore implementation
-  // const q = query(collection(db, 'calls'), where('timestamp', '>=', periodStart(period)))
-  // const snap = await getDocs(q)
-  // return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-  throw new Error('Firestore not yet configured')
+  return body
 }
 
-export function useCallOutcomes(period) {
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
+export function useAgents() {
+  const { idToken } = useAuth()
   return useQuery({
-    queryKey: ['call-outcomes', period],
-    queryFn: async () => {
-      const calls = await fetchCallsForPeriod(period)
-      return aggregateCallOutcomes(calls)
-    },
-    staleTime: 1000 * 60 * 5, // 5 min
+    queryKey: ['agents'],
+    queryFn: async () => (await authedFetch('/api/agents', idToken)).agents ?? [],
+    enabled: !!idToken,
+    staleTime: 1000 * 60 * 10,
   })
 }
 
-export function useActivityLeaderboard(period) {
+// ─── Calls (paginates through all results for the date range) ────────────────
+// Synthflow caps limit at 100/page; this helper walks pages until drained or
+// the safety cap is hit, so consumers get a single array of all matching calls.
+
+const PAGE_SIZE = 100
+const MAX_PAGES = 50 // safety cap: 5000 calls per query
+
+async function fetchAllCalls({ idToken, agentId, fromDate, toDate }) {
+  const all = []
+  let offset = 0
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const params = new URLSearchParams({
+      agentId,
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    })
+    if (fromDate) params.set('fromDate', fromDate)
+    if (toDate) params.set('toDate', toDate)
+    const data = await authedFetch(`/api/calls?${params}`, idToken)
+    const page = data.calls ?? []
+    all.push(...page)
+    if (page.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+  return all
+}
+
+export function useCalls({ agentId, fromDate, toDate }) {
+  const { idToken } = useAuth()
   return useQuery({
-    queryKey: ['activity-leaderboard', period],
-    queryFn: async () => {
-      const calls = await fetchCallsForPeriod(period)
-      return aggregateActivity(calls)
-    },
-    staleTime: 1000 * 60 * 5,
+    queryKey: ['calls', agentId, fromDate, toDate],
+    queryFn: () => fetchAllCalls({ idToken, agentId, fromDate, toDate }),
+    enabled: !!idToken && !!agentId,
+    staleTime: 1000 * 60 * 2,
   })
 }
 
-export function useAgentCalls(agentId, period) {
+export function useCall(callId) {
+  const { idToken } = useAuth()
   return useQuery({
-    queryKey: ['agent-calls', agentId, period],
-    queryFn: async () => {
-      const calls = await fetchCallsForPeriod(period)
-      return getAgentCalls(calls, agentId)
-    },
-    enabled: !!agentId,
-    staleTime: 1000 * 60 * 5,
+    queryKey: ['call', callId],
+    queryFn: async () => (await authedFetch(`/api/call?id=${encodeURIComponent(callId)}`, idToken)).call,
+    enabled: !!idToken && !!callId,
+    staleTime: 1000 * 60 * 10,
   })
 }
+
+// ─── Period helper ───────────────────────────────────────────────────────────
+
+export function periodToDateRange(period, now = new Date()) {
+  if (period === 'all') return { fromDate: undefined, toDate: undefined }
+  const toDate = now.toISOString().slice(0, 10)
+  const from = new Date(now)
+  if (period === '7days') from.setDate(from.getDate() - 6)
+  else if (period === '30days') from.setDate(from.getDate() - 29)
+  // 'today' falls through — from stays at today's date
+  const fromDate = from.toISOString().slice(0, 10)
+  return { fromDate, toDate }
+}
+
+// Transitional stubs — item 11 replaces the consumers of these with new shapes.
+// Kept so the build passes; UI shows a loading state until rewired.
+const TRANSITIONAL_STUB = { data: undefined, isPending: true, isError: false, error: null }
+export function useCallOutcomes() { return TRANSITIONAL_STUB }
+export function useActivityLeaderboard() { return TRANSITIONAL_STUB }
+export function useAgentCalls() { return TRANSITIONAL_STUB }
