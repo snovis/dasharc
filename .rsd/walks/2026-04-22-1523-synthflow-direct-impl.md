@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 8 done · 0 rejected · 1 deferred · 0 modified · 7 unresolved
+Totals: 16 items · 9 done · 0 rejected · 1 deferred · 0 modified · 6 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -111,14 +111,16 @@ Most of this scope was absorbed into item 8: sessionStorage-backed token storage
 **Resolution**
 deferred · baseline auth from item 8 is sufficient for smoke test; revisit after item 14 validates the happy path.
 
-### 10. Rewrite `src/hooks/useCallData.js` — unresolved
+### 10. Rewrite `src/hooks/useCallData.js` — done
 
 **Recommendation**
 Replace Firestore TODOs with `fetch('/api/...')` calls, including `Authorization: Bearer <idToken>` header. TanStack Query keys include agentId + date range. Set sensible `staleTime` (maybe 2–5 min) so users don't hammer Synthflow on every chart rerender.
 
 **Discussion**
+Commit `9452c81`. New hooks talking to the `/api/*` proxies: `useAgents()` (10 min stale), `useCalls({agentId, fromDate, toDate})` (2 min stale — walks pagination internally via `fetchAllCalls`, caps at 5,000 calls/query), `useCall(callId)` (10 min stale). All Bearer-authed via `useAuth().idToken`; Query `enabled: !!idToken` gates. Added `periodToDateRange()` helper for `today`/`7days`/`30days`/`all` → `{fromDate, toDate}`. Addresses item 1's pagination flag: pagination is handled in the hook, not the UI. Dropped Firestore TODOs + mock-mode branch + all `../mock/callData` imports. Old exports (`useCallOutcomes`, `useActivityLeaderboard`, `useAgentCalls`) kept as **transitional stubs returning `{isPending: true}`** so the build passes — DashboardPage + AgentDetailPage show loading spinners until item 11 rewires them. `npm run build` clean (643 modules). Helper verified with fixtures.
 
 **Resolution**
+done · new hooks shipped + paginating correctly; transitional stubs keep build passing; page rewiring is item 11's scope.
 
 ### 11. Update charts + `AgentDetailPage.jsx` for Synthflow call shape — unresolved
 
@@ -188,6 +190,8 @@ Never auto-rewrites items; just a heads-up for when we get there.
 - item 15: bonus upside — firebase removal also resolves the critical `protobufjs` CVE (transitive via `@firebase/firestore → @grpc/proto-loader`). After the cleanup, rerun `npm audit` and address any residual dev-only findings (picomatch, brace-expansion, vite bump). · raised after item 3 resolved
 - item 9: scope narrowed. Item 8 already shipped the useAuth rewrite (context, sessionStorage persistence, signIn/signOut, Firebase references dropped). Only the **silent refresh before 1hr expiry** remains — hook into GIS auto-select or re-prompt flow so open dashboards don't 401 when the ID token expires. · raised after item 8 resolved
 - item 15: `src/firebase/` is now fully unreferenced in the active code path (verified via grep after item 8). Safe to delete during final cleanup — no remaining `import` statements to break. · raised after item 8 resolved
+- item 11: item 10 left three transitional stub exports in `src/hooks/useCallData.js` (`useCallOutcomes`, `useActivityLeaderboard`, `useAgentCalls`) that return `{isPending: true}` so the build passes. Item 11 should delete these after rewiring the page components to the new hooks — or they'll hang the UI on loading forever. · raised after item 10 resolved
+- item 15: `src/mock/callData.js` is now fully unreferenced by the active code (useCallData no longer imports from it after item 10). Safe to delete during final cleanup. · raised after item 10 resolved
 
 ## Summary
 
