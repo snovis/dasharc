@@ -152,6 +152,7 @@ export default function AgentDetailPage() {
                     <th className="pb-3 font-medium">Phone</th>
                     <th className="pb-3 font-medium">Outcome</th>
                     <th className="pb-3 font-medium">Duration</th>
+                    <th className="pb-3 font-medium text-center" title="Media available">Media</th>
                     <th className="pb-3 font-medium"></th>
                   </tr>
                 </thead>
@@ -182,6 +183,20 @@ export default function AgentDetailPage() {
                         </td>
                         <td className="py-2.5 text-slate-500">
                           {formatDuration(call.duration)}
+                        </td>
+                        <td className="py-2.5 text-center text-xs">
+                          <span className="inline-flex gap-1">
+                            {call.recording_url ? (
+                              <span title="Recording available">🎙️</span>
+                            ) : (
+                              <span className="opacity-20" title="No recording">🎙️</span>
+                            )}
+                            {call.transcript && String(call.transcript).trim().length > 0 ? (
+                              <span title="Transcript available">📝</span>
+                            ) : (
+                              <span className="opacity-20" title="No transcript">📝</span>
+                            )}
+                          </span>
                         </td>
                         <td className="py-2.5 text-slate-300 text-xs">View →</td>
                       </tr>
