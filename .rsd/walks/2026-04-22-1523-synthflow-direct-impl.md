@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 13 done · 0 rejected · 1 deferred · 0 modified · 2 unresolved
+Totals: 16 items · 13 done · 0 rejected · 2 deferred · 0 modified · 1 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -166,14 +166,16 @@ Scott ran `vercel dev` locally and validated the full flow end-to-end. Sign-in v
 **Resolution**
 done · end-to-end flow verified; mid-walk UX improvements committed; pivot is green-lit.
 
-### 15. Final cleanup: delete Firebase scaffolding — unresolved
+### 15. Final cleanup: delete Firebase scaffolding — deferred
 
 **Recommendation**
 After smoke test passes: delete `src/firebase/` (config.js, auth.js), `src/mock/callData.js`, `docs/FIRESTORE_SCHEMA.md`. Remove `firebase` from `package.json` dependencies, run `npm install` to prune lockfile. One cleanup commit. If anything breaks, `git revert` — we still have the branch's earlier state to fall back on.
 
 **Discussion**
+Smoke test (item 14) passed, so the cleanup is unblocked — but Scott is shipping tonight to show Daniel and wants to minimize risk between now and deploy. Dead code doesn't affect user-visible behavior (just adds ~300 KB to the bundle that's already being served). Defer to a fresh-head session tomorrow: delete `src/firebase/`, `src/mock/callData.js`, `docs/FIRESTORE_SCHEMA.md`, the `firebase` dependency, `appConfig.useMockData`, and `VITE_USE_MOCK_DATA`. Then rerun `npm audit` (expect the critical `protobufjs` CVE to self-resolve, may still have dev-only picomatch/brace-expansion/vite findings).
 
 **Resolution**
+deferred · ship first (item 16), clean up tomorrow in a follow-up.
 
 ### 16. Deploy first Vercel project — unresolved
 
