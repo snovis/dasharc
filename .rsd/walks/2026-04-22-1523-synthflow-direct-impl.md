@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 4 done · 0 rejected · 0 deferred · 0 modified · 12 unresolved
+Totals: 16 items · 5 done · 0 rejected · 0 deferred · 0 modified · 11 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -56,14 +56,16 @@ Shared helper (not an endpoint) that verifies a Google ID token against Google's
 **Resolution**
 done · helper committed; failure paths verified; happy path deferred to item 14 smoke test.
 
-### 5. Create `api/agents.js` — unresolved
+### 5. Create `api/agents.js` — done
 
 **Recommendation**
 `GET /api/agents` — verify token, fetch agents for `AGENT_IDS` from Synthflow, return the filtered metadata list. This is what the dashboard uses to populate the agent picker / summary cards.
 
 **Discussion**
+67-line handler committed at `e9fbd74`. Key finding during probe: Synthflow's UI calls them "agents" but the API endpoint is `/v2/assistants` — analogous list vs single-ID pattern as `/v2/calls`. Handler fetches the full list once (agency has 5 assistants; limit=100 future-proofs), filters to `AGENT_IDS`, sanitizes. Strips: `agent.prompt` (8KB business logic with PII and campaign scripts), `external_webhook_url`, `inbound_call_webhook_url`, `consent_text`. Returns `{ agents: [...] }` — cleaner than forwarding Synthflow's envelope. Seeded `AGENT_IDS=0df733c4-a8fb-4d14-a12a-55fc62396bc7` (OnSite Medical only) in `.env`. Smoke-tested: POST→405, no auth→401, bogus token→401; full Synthflow fetch+filter+sanitize pipeline verified with real env (5 assistants → 1 filtered, 15KB → 2.8KB after sanitize).
 
 **Resolution**
+done · handler committed; Synthflow fetch+filter+sanitize verified; auth happy path deferred to item 14.
 
 ### 6. Create `api/calls.js` — unresolved
 
