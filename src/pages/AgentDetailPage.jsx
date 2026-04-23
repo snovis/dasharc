@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import FilterBar from '../components/dashboard/FilterBar'
 import Card from '../components/ui/Card'
@@ -31,9 +31,27 @@ const SORT_OPTIONS = [
 export default function AgentDetailPage() {
   const { agentId } = useParams()
   const navigate = useNavigate()
-  const [period, setPeriod] = useState('7days')
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [sortBy, setSortBy] = useState('newest')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // URL query params are the source of truth so filter/sort state survives
+  // navigation (e.g. clicking into a call detail and hitting back).
+  const period = searchParams.get('period') ?? '7days'
+  const filterStatus = searchParams.get('filter') ?? 'all'
+  const sortBy = searchParams.get('sort') ?? 'newest'
+  const hasTranscript = searchParams.get('transcript') === '1'
+
+  function updateParam(key, value, defaultValue) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (value === defaultValue || value === false) next.delete(key)
+      else next.set(key, value === true ? '1' : value)
+      return next
+    })
+  }
+  const setPeriod = (v) => updateParam('period', v, '7days')
+  const setFilterStatus = (v) => updateParam('filter', v, 'all')
+  const setSortBy = (v) => updateParam('sort', v, 'newest')
+  const setHasTranscript = (v) => updateParam('transcript', v, false)
 
   const agentsQ = useAgents()
   const agent = agentsQ.data?.find((a) => a.model_id === agentId)
@@ -47,6 +65,9 @@ export default function AgentDetailPage() {
     let result = filterStatus === 'all'
       ? calls
       : calls.filter((c) => normalizeStatus(c.call_status) === filterStatus)
+    if (hasTranscript) {
+      result = result.filter((c) => c.transcript && String(c.transcript).trim().length > 0)
+    }
     result = [...result].sort((a, b) => {
       if (sortBy === 'longest' || sortBy === 'shortest') {
         const da = Number(a.duration || 0)
@@ -58,7 +79,7 @@ export default function AgentDetailPage() {
       return sortBy === 'oldest' ? ta - tb : tb - ta
     })
     return result
-  }, [calls, filterStatus, sortBy])
+  }, [calls, filterStatus, sortBy, hasTranscript])
 
   const total = calls.length
   const completed = calls.filter((c) => c.call_status === 'completed').length
@@ -134,6 +155,15 @@ export default function AgentDetailPage() {
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                </label>
+                <label className="flex items-center gap-2 text-slate-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasTranscript}
+                    onChange={(e) => setHasTranscript(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-slate-600">Has transcript 📝</span>
                 </label>
                 <span className="text-slate-400 ml-auto">
                   Showing {displayedCalls.length.toLocaleString()} of {calls.length.toLocaleString()}
