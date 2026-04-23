@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 3 done · 0 rejected · 0 deferred · 0 modified · 13 unresolved
+Totals: 16 items · 4 done · 0 rejected · 0 deferred · 0 modified · 12 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -45,14 +45,16 @@ In `package.json`: add `google-auth-library` (server-side Google ID token verifi
 **Resolution**
 done · google-auth-library@^10.6.2 installed; no conflicts; audit warnings triaged (mostly self-resolve at item 15).
 
-### 4. Create `api/_lib/verify-token.js` — unresolved
+### 4. Create `api/_lib/verify-token.js` — done
 
 **Recommendation**
 Shared helper (not an endpoint) that verifies a Google ID token against Google's JWKs, checks the audience matches our `GOOGLE_CLIENT_ID`, and asserts the caller's email is in `ALLOWED_EMAILS` (normalized lowercase). Underscore prefix on `_lib/` keeps Vercel from routing it as a public endpoint. Returns `{ email }` on success, throws on failure. All other `api/*` handlers call this first.
 
 **Discussion**
+68-line ESM module committed at `6f24631`. Exports: `verifyRequest(req)` → `{ email, name, picture, sub }` or throws; `AuthError` class (carries `.status` 401/403/500); `handleAuthError(err, res)` convenience for catch blocks. Reads `VITE_GOOGLE_CLIENT_ID` server-side (one env var, Vercel functions see all env vars regardless of Vite prefix). Enforces `email_verified` from Google payload as defense-in-depth. Seeded `ALLOWED_EMAILS=scott@rymare.com,daniel@salesarcsolutions.com` in `.env`. Smoke-tested 3 failure paths (no header, Basic auth, bogus Bearer) — all throw AuthError with correct status codes. Happy path requires a real Google sign-in (validated by item 14 end-to-end smoke test).
 
 **Resolution**
+done · helper committed; failure paths verified; happy path deferred to item 14 smoke test.
 
 ### 5. Create `api/agents.js` — unresolved
 
