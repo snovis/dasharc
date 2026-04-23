@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 10 done · 0 rejected · 1 deferred · 0 modified · 5 unresolved
+Totals: 16 items · 11 done · 0 rejected · 1 deferred · 0 modified · 4 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -133,14 +133,16 @@ Commit `c60bdbd` (8 files, +595/-265). Scope expanded beyond the original recomm
 **Resolution**
 done · full UI rewired; charts/detail pages consume Synthflow shape; interactive verification deferred to item 14.
 
-### 12. Update `.env.example` — unresolved
+### 12. Update `.env.example` — done
 
 **Recommendation**
 Remove `VITE_FIREBASE_*` and `VITE_USE_MOCK_DATA`. Add: `VITE_GOOGLE_CLIENT_ID` (client-side, browser needs it), `SYNTHFLOW_API_KEY` (server-side only), `ALLOWED_EMAILS` (comma-separated), `AGENT_IDS` (comma-separated). Keep `VITE_COMPANY_NAME` / `VITE_APP_NAME`. Document the purpose of each in a comment above.
 
 **Discussion**
+Commit `5bf8464`. Rewrote the file with four labeled sections: App Config (display strings), Google Sign-In client-side, Synthflow API server-side secret, Access Control (allowlists). Each section explains what it is, where to obtain the value, and for `SYNTHFLOW_API_KEY` why it deliberately lacks the `VITE_` prefix (would leak into the browser bundle). Removed: 6 `VITE_FIREBASE_*` vars + `VITE_USE_MOCK_DATA`.
 
 **Resolution**
+done · `.env.example` reflects the new architecture; each variable documented.
 
 ### 13. Update `CLAUDE.md` — unresolved
 
