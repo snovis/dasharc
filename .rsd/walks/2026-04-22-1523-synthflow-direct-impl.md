@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 12 done · 0 rejected · 1 deferred · 0 modified · 3 unresolved
+Totals: 16 items · 13 done · 0 rejected · 1 deferred · 0 modified · 2 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -155,14 +155,16 @@ Commit `cd1e1f2` (+109/-58). Full rewrite. New Architecture section with ASCII d
 **Resolution**
 done · CLAUDE.md reflects the Synthflow-direct architecture end to end.
 
-### 14. Local smoke test with `vercel dev` — unresolved
+### 14. Local smoke test with `vercel dev` — done
 
 **Recommendation**
 Run `vercel dev` locally (proxies frontend + serverless functions on one port). Sign in with Google, verify email allowlist rejection works, load a real agent's calls, click through to a call detail page with transcript + recording. **This is the go/no-go gate.** Only after this passes do we delete the Firebase scaffolding.
 
 **Discussion**
+Scott ran `vercel dev` locally and validated the full flow end-to-end. Sign-in via Google GIS works; allowlist rejection returns 403 on reload (fixed a UX gap by clearing the TanStack Query cache on signIn/signOut so stale data doesn't flash before the server 403). Dashboard loads live Synthflow data; charts render; agent detail page shows the sorted/filtered call log; call detail page shows metadata + audio + transcript + judge_results. Mid-walk we also shipped several improvements surfaced by actually using the UI: adaptive bucket granularity for "Calls Over Time" (hourly/daily/weekly/monthly), zero-filled empty buckets so sparse periods still visually represent the full range, a progress bar for the paginated call fetch (~10 sequential requests for 1k records), filter+sort+"has transcript" controls on the agent detail page, 🎙️/📝 media indicators in the call log, and URL-backed filter state so navigation preserves context. All built on top of the already-validated API proxy layer (items 5-7). Go/no-go gate passed.
 
 **Resolution**
+done · end-to-end flow verified; mid-walk UX improvements committed; pivot is green-lit.
 
 ### 15. Final cleanup: delete Firebase scaffolding — unresolved
 
