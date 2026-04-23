@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from './useAuth'
 
@@ -33,7 +34,7 @@ export function useAgents() {
 const PAGE_SIZE = 100
 const MAX_PAGES = 50 // safety cap: 5000 calls per query
 
-async function fetchAllCalls({ idToken, agentId, fromDate, toDate }) {
+async function fetchAllCalls({ idToken, agentId, fromDate, toDate, onProgress }) {
   const all = []
   let offset = 0
   for (let i = 0; i < MAX_PAGES; i++) {
@@ -47,6 +48,8 @@ async function fetchAllCalls({ idToken, agentId, fromDate, toDate }) {
     const data = await authedFetch(`/api/calls?${params}`, idToken)
     const page = data.calls ?? []
     all.push(...page)
+    const total = data.pagination?.total_records ?? all.length
+    onProgress?.(all.length, total)
     if (page.length < PAGE_SIZE) break
     offset += PAGE_SIZE
   }
@@ -55,12 +58,29 @@ async function fetchAllCalls({ idToken, agentId, fromDate, toDate }) {
 
 export function useCalls({ agentId, fromDate, toDate }) {
   const { idToken } = useAuth()
-  return useQuery({
+  const [progress, setProgress] = useState({ loaded: 0, total: 0 })
+  // Keep the latest setter in a ref so the queryFn closure always writes to
+  // the current component instance (avoids stale closures across re-renders).
+  const setterRef = useRef(setProgress)
+  setterRef.current = setProgress
+
+  const query = useQuery({
     queryKey: ['calls', agentId, fromDate, toDate],
-    queryFn: () => fetchAllCalls({ idToken, agentId, fromDate, toDate }),
+    queryFn: () => {
+      setterRef.current({ loaded: 0, total: 0 })
+      return fetchAllCalls({
+        idToken,
+        agentId,
+        fromDate,
+        toDate,
+        onProgress: (loaded, total) => setterRef.current({ loaded, total }),
+      })
+    },
     enabled: !!idToken && !!agentId,
     staleTime: 1000 * 60 * 2,
   })
+
+  return { ...query, progress }
 }
 
 export function useCall(callId) {

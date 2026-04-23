@@ -6,6 +6,7 @@ import CallOutcomesChart from '../components/charts/CallOutcomesChart'
 import CallsOverTime from '../components/charts/CallsOverTime'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
+import ProgressBar from '../components/ui/ProgressBar'
 import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
 import {
   aggregateOutcomesByAgent,
@@ -74,7 +75,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card title="Call Outcomes" subtitle={periodLabel(period)}>
             {loading ? (
-              <div className="flex justify-center py-12"><Spinner /></div>
+              <ProgressBar loaded={callsQ.progress?.loaded ?? 0} total={callsQ.progress?.total ?? 0} />
             ) : (
               <CallOutcomesChart
                 data={outcomesData}
@@ -85,7 +86,7 @@ export default function DashboardPage() {
 
           <Card title="Calls Over Time" subtitle={`${periodLabel(period)} · ${granularityLabel(period)}`}>
             {loading ? (
-              <div className="flex justify-center py-12"><Spinner /></div>
+              <ProgressBar loaded={callsQ.progress?.loaded ?? 0} total={callsQ.progress?.total ?? 0} />
             ) : (
               <CallsOverTime data={overTimeData} />
             )}

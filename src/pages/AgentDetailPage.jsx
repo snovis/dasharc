@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout'
 import FilterBar from '../components/dashboard/FilterBar'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
+import ProgressBar from '../components/ui/ProgressBar'
 import {
   useAgents,
   useCalls,
@@ -82,7 +83,7 @@ export default function AgentDetailPage() {
 
         <Card title="Call Log">
           {callsQ.isPending ? (
-            <div className="flex justify-center py-12"><Spinner /></div>
+            <ProgressBar loaded={callsQ.progress?.loaded ?? 0} total={callsQ.progress?.total ?? 0} />
           ) : callsQ.isError ? (
             <p className="text-red-500 text-sm">Failed to load calls: {callsQ.error?.message}</p>
           ) : sortedCalls.length === 0 ? (
