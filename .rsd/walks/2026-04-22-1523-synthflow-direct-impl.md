@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 7 done · 0 rejected · 0 deferred · 0 modified · 9 unresolved
+Totals: 16 items · 8 done · 0 rejected · 0 deferred · 0 modified · 8 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -89,14 +89,16 @@ Resolved the prior flag by probing: correct endpoint is `GET /v2/calls/{call_id}
 **Resolution**
 done · endpoint probed + handler committed; cross-agent 404 verified live; auth happy path deferred to item 14.
 
-### 8. Rewrite `src/pages/LoginPage.jsx` with Google GIS — unresolved
+### 8. Rewrite `src/pages/LoginPage.jsx` with Google GIS — done
 
 **Recommendation**
 Replace the email/password form with a Google Sign-In button using the `google.accounts.id` browser library. On successful sign-in, hand the ID token to `useAuth` and route to the dashboard. Load the GIS script from `https://accounts.google.com/gsi/client` in `index.html` or via dynamic injection. Removes the last Firebase Auth imports from this file; `src/firebase/` still exists but becomes unreferenced.
 
 **Discussion**
+Commit `38b682f` touched 7 files because LoginPage + useAuth are tightly coupled and Layout.jsx also imported from firebase/auth. Work done: (1) GIS script tag in `index.html`; (2) `appConfig.googleClientId` from `VITE_GOOGLE_CLIENT_ID`; (3) rewrote `useAuth.js`→`useAuth.jsx` as `AuthContext` + `AuthProvider` + `useAuth()` hook — decodes Google ID token for user info, persists in sessionStorage (survives reloads, auto-expires on `exp` claim), exposes signIn/signOut; (4) `<AuthProvider>` wraps routes in App.jsx; (5) LoginPage renders GIS button with graceful degradation when client-id missing or script fails to load; (6) Layout.jsx sign-out now uses `useAuth().signOut`. `npm run build` passes (643 modules). **All Firebase imports are gone from the active code path** — `src/firebase/` is now unreferenced dead code, ready for item 15. Interactive flow (button renders, sign-in completes, redirect) deferred to item 14 smoke test. The basics of item 9 (store token, expose signIn/signOut, drop Firebase refs) were absorbed into this commit — item 9 scope narrows to silent-refresh only.
 
 **Resolution**
+done · LoginPage + AuthContext shipped; build clean; Firebase unreferenced; interactive test deferred to item 14.
 
 ### 9. Rewrite `src/hooks/useAuth.js` — unresolved
 
@@ -182,6 +184,8 @@ Never auto-rewrites items; just a heads-up for when we get there.
 - item 11: Pagination cap is 100/request. Month-view on a ~100-calls/day agent = ~30 paginated requests. `useCallData` caching strategy + staleTime decisions should factor this in explicitly; may also want a "fetch all pages and aggregate" helper rather than pushing pagination to the UI. · raised after item 1 resolved
 - item 12: Implementation now has concrete grounding: transcript is a plain string needing `\n(human|assistant):` split for chat-style UI; `call_status` buckets observed so far are `hangup_on_voicemail`, `no-answer`, `failed`, `completed`, `left_voicemail` (more may exist); `judge_results` (~35 AI-quality fields) is a dashboard opportunity not in the original spec — worth deciding whether to surface it in charts or reserve for the call detail page. · raised after item 1 resolved
 - item 15: bonus upside — firebase removal also resolves the critical `protobufjs` CVE (transitive via `@firebase/firestore → @grpc/proto-loader`). After the cleanup, rerun `npm audit` and address any residual dev-only findings (picomatch, brace-expansion, vite bump). · raised after item 3 resolved
+- item 9: scope narrowed. Item 8 already shipped the useAuth rewrite (context, sessionStorage persistence, signIn/signOut, Firebase references dropped). Only the **silent refresh before 1hr expiry** remains — hook into GIS auto-select or re-prompt flow so open dashboards don't 401 when the ID token expires. · raised after item 8 resolved
+- item 15: `src/firebase/` is now fully unreferenced in the active code path (verified via grep after item 8). Safe to delete during final cleanup — no remaining `import` statements to break. · raised after item 8 resolved
 
 ## Summary
 
