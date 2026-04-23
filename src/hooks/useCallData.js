@@ -86,9 +86,3 @@ export function periodToDateRange(period, now = new Date()) {
   return { fromDate, toDate }
 }
 
-// Transitional stubs — item 11 replaces the consumers of these with new shapes.
-// Kept so the build passes; UI shows a loading state until rewired.
-const TRANSITIONAL_STUB = { data: undefined, isPending: true, isError: false, error: null }
-export function useCallOutcomes() { return TRANSITIONAL_STUB }
-export function useActivityLeaderboard() { return TRANSITIONAL_STUB }
-export function useAgentCalls() { return TRANSITIONAL_STUB }

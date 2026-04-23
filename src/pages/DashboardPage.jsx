@@ -1,101 +1,155 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import FilterBar from '../components/dashboard/FilterBar'
 import CallOutcomesChart from '../components/charts/CallOutcomesChart'
-import ActivityLeaderboard from '../components/charts/ActivityLeaderboard'
+import CallsOverTime from '../components/charts/CallsOverTime'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
-import { useCallOutcomes, useActivityLeaderboard } from '../hooks/useCallData'
+import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
+import { aggregateOutcomesByAgent, aggregateCallsByDay } from '../lib/synthflow'
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState('7days')
   const navigate = useNavigate()
 
-  const outcomes = useCallOutcomes(period)
-  const activity = useActivityLeaderboard(period)
+  const agentsQ = useAgents()
+  const agents = agentsQ.data ?? []
 
-  function handleAgentClick(agent) {
-    if (agent?.agentId) navigate(`/agents/${agent.agentId}`)
+  const { fromDate, toDate } = useMemo(() => periodToDateRange(period), [period])
+
+  // With a typical deployment targeting a single agent, we fetch its calls directly.
+  // Multi-agent deployments would fan out; for now we just use the first agent.
+  const primaryAgent = agents[0]
+  const callsQ = useCalls({
+    agentId: primaryAgent?.model_id,
+    fromDate,
+    toDate,
+  })
+  const calls = callsQ.data ?? []
+
+  const outcomesData = useMemo(
+    () => aggregateOutcomesByAgent(calls, agents),
+    [calls, agents],
+  )
+  const overTimeData = useMemo(() => aggregateCallsByDay(calls), [calls])
+
+  function handleAgentClick(row) {
+    if (row?.agentId) navigate(`/agents/${row.agentId}`)
   }
+
+  const loading = agentsQ.isPending || (primaryAgent && callsQ.isPending)
+  const error = agentsQ.isError || callsQ.isError
 
   return (
     <Layout>
       <div className="px-8 py-6 space-y-6">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Call Activity Dashboard</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Click any agent row to drill into their calls</p>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {agents.length > 1 ? 'Click any agent row to drill into their calls' : 'Live data from Synthflow'}
+            </p>
           </div>
           <FilterBar period={period} onChange={setPeriod} />
         </div>
 
-        {/* Summary stats */}
-        <SummaryStats outcomesData={outcomes.data} activityData={activity.data} />
+        {error && (
+          <ErrorBanner error={agentsQ.error || callsQ.error} />
+        )}
 
-        {/* Charts */}
+        <SummaryStats calls={calls} loading={loading} />
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card
-            title="Call Outcomes by Rep"
-            subtitle={periodLabel(period)}
-          >
-            {outcomes.isPending ? (
+          <Card title="Call Outcomes" subtitle={periodLabel(period)}>
+            {loading ? (
               <div className="flex justify-center py-12"><Spinner /></div>
-            ) : outcomes.isError ? (
-              <p className="text-red-500 text-sm">Failed to load data.</p>
             ) : (
-              <CallOutcomesChart data={outcomes.data} onAgentClick={handleAgentClick} />
+              <CallOutcomesChart
+                data={outcomesData}
+                onAgentClick={agents.length > 1 ? handleAgentClick : undefined}
+              />
             )}
           </Card>
 
-          <Card
-            title="Activity Leaderboard by Rep"
-            subtitle={periodLabel(period)}
-          >
-            {activity.isPending ? (
+          <Card title="Calls Over Time" subtitle={periodLabel(period)}>
+            {loading ? (
               <div className="flex justify-center py-12"><Spinner /></div>
-            ) : activity.isError ? (
-              <p className="text-red-500 text-sm">Failed to load data.</p>
             ) : (
-              <ActivityLeaderboard data={activity.data} onAgentClick={handleAgentClick} />
+              <CallsOverTime data={overTimeData} />
             )}
           </Card>
         </div>
+
+        {agents.length === 1 && primaryAgent && (
+          <Card title={`${primaryAgent.name}`} subtitle="Open call log">
+            <button
+              onClick={() => navigate(`/agents/${primaryAgent.model_id}`)}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              View all calls →
+            </button>
+          </Card>
+        )}
       </div>
     </Layout>
   )
 }
 
 function periodLabel(period) {
-  return { today: 'Today', '7days': 'Last 7 days', '30days': 'Last 30 days' }[period]
+  return {
+    today: 'Today',
+    '7days': 'Last 7 days',
+    '30days': 'Last 30 days',
+    all: 'All time',
+  }[period] ?? period
 }
 
-function SummaryStats({ outcomesData, activityData }) {
-  if (!outcomesData || !activityData) return null
+function SummaryStats({ calls, loading }) {
+  const totals = useMemo(() => {
+    const total = calls.length
+    let completed = 0, voicemail = 0, noAnswer = 0
+    for (const c of calls) {
+      if (c.call_status === 'completed') completed++
+      else if (c.call_status === 'left_voicemail' || c.call_status === 'hangup_on_voicemail') voicemail++
+      else if (c.call_status === 'no-answer') noAnswer++
+    }
+    return { total, completed, voicemail, noAnswer }
+  }, [calls])
 
-  const totalCalls = outcomesData.reduce((s, a) => s + a.total, 0)
-  const connected = outcomesData.reduce((s, a) => s + a.connected, 0)
-  const connectRate = totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0
-  const totalActivities = activityData.reduce((s, a) => s + a.total, 0)
-  const activeAgents = outcomesData.length
+  const connectRate = totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0
+  const vmRate = totals.total > 0 ? Math.round((totals.voicemail / totals.total) * 100) : 0
 
   const stats = [
-    { label: 'Total Calls', value: totalCalls.toLocaleString() },
-    { label: 'Connected', value: connected.toLocaleString(), sub: `${connectRate}% connect rate` },
-    { label: 'Total Activities', value: totalActivities.toLocaleString() },
-    { label: 'Active Agents', value: activeAgents },
+    { label: 'Total Calls', value: loading ? '—' : totals.total.toLocaleString() },
+    { label: 'Completed', value: loading ? '—' : totals.completed.toLocaleString(), sub: `${connectRate}% connect rate` },
+    { label: 'Voicemail', value: loading ? '—' : totals.voicemail.toLocaleString(), sub: `${vmRate}% of calls` },
+    { label: 'No Answer', value: loading ? '—' : totals.noAnswer.toLocaleString() },
   ]
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {stats.map(s => (
+      {stats.map((s) => (
         <div key={s.label} className="bg-white rounded-xl border border-slate-200 px-5 py-4">
           <p className="text-xs text-slate-400 font-medium">{s.label}</p>
           <p className="text-2xl font-semibold text-slate-900 mt-1">{s.value}</p>
           {s.sub && <p className="text-xs text-slate-400 mt-0.5">{s.sub}</p>}
         </div>
       ))}
+    </div>
+  )
+}
+
+function ErrorBanner({ error }) {
+  const status = error?.status
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+      <p className="font-medium mb-1">Failed to load data</p>
+      <p className="text-xs text-red-600">
+        {status === 401 && 'Your session has expired. Please sign in again.'}
+        {status === 403 && 'Your email is not authorized for this deployment.'}
+        {!status && (error?.message || 'Unknown error.')}
+      </p>
     </div>
   )
 }
