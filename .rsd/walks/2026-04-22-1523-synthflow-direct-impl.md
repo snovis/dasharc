@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 2 done · 0 rejected · 0 deferred · 0 modified · 14 unresolved
+Totals: 16 items · 3 done · 0 rejected · 0 deferred · 0 modified · 13 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -34,14 +34,16 @@ Scott created the OAuth client in Google Cloud Console and added `VITE_GOOGLE_CL
 **Resolution**
 done · OAuth client created, VITE_GOOGLE_CLIENT_ID in .env, suffix verified.
 
-### 3. Add `google-auth-library` dependency — unresolved
+### 3. Add `google-auth-library` dependency — done
 
 **Recommendation**
 In `package.json`: add `google-auth-library` (server-side Google ID token verification). Leave `firebase` in place for now — it becomes dead weight as we rewrite files that import from it, but we don't remove it until the Synthflow path is proven end-to-end (see final cleanup).
 
 **Discussion**
+`npm install google-auth-library` added `^10.6.2` to `package.json` + 20 transitive packages. Clean install, no conflicts. `npm audit` flagged 4 vulnerabilities (1 critical, 2 high, 1 moderate) — none from google-auth-library itself: critical `protobufjs` is transitive from firebase (self-resolves at item 15); `brace-expansion` is via eslint (dev-only); `picomatch` is via vite's tinyglobby (dev-only); `vite` 8.0.1 has a dev-server path-traversal worth bumping later but not blocking. Deferred audit cleanup until after item 15.
 
 **Resolution**
+done · google-auth-library@^10.6.2 installed; no conflicts; audit warnings triaged (mostly self-resolve at item 15).
 
 ### 4. Create `api/_lib/verify-token.js` — unresolved
 
@@ -171,6 +173,7 @@ Never auto-rewrites items; just a heads-up for when we get there.
 - item 7: `get-phone-call` single-call endpoint was NOT probed in item 1 — only `list-calls`. Before building `api/call.js`, need a quick curl against whatever Synthflow's single-call detail endpoint is (likely `GET /v2/calls/{call_id}`) to confirm the path and whether it returns the same call object shape or something richer. · raised after item 1 resolved
 - item 11: Pagination cap is 100/request. Month-view on a ~100-calls/day agent = ~30 paginated requests. `useCallData` caching strategy + staleTime decisions should factor this in explicitly; may also want a "fetch all pages and aggregate" helper rather than pushing pagination to the UI. · raised after item 1 resolved
 - item 12: Implementation now has concrete grounding: transcript is a plain string needing `\n(human|assistant):` split for chat-style UI; `call_status` buckets observed so far are `hangup_on_voicemail`, `no-answer`, `failed`, `completed`, `left_voicemail` (more may exist); `judge_results` (~35 AI-quality fields) is a dashboard opportunity not in the original spec — worth deciding whether to surface it in charts or reserve for the call detail page. · raised after item 1 resolved
+- item 15: bonus upside — firebase removal also resolves the critical `protobufjs` CVE (transitive via `@firebase/firestore → @grpc/proto-loader`). After the cleanup, rerun `npm audit` and address any residual dev-only findings (picomatch, brace-expansion, vite bump). · raised after item 3 resolved
 
 ## Summary
 
