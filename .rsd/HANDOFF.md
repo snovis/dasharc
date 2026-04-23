@@ -1,39 +1,39 @@
 # Handoff
 
-Written: 2026-04-22 15:07 · Context used: (unknown)
-Branch: synthflow-direct · Last commit: cebaff5
+Written: 2026-04-23 14:28 · Context used: ~46%
+Branch: main · Last commit: dd27e19
 
 ## What we're working on
 
-Designing (and about to implement) DashARC as a thin React GUI on top of SalesARC's agency-level Synthflow account. The dashboard lets a client view reporting for *their* assigned Synthflow agents only — no database, no sync jobs, live API proxy through Vercel serverless functions, Google OAuth for auth. One Vercel deployment per client.
+DashARC is live in production at `https://dasharc-local.vercel.app`. Daniel's using it and loves the UI, but first-load is slow (5-8s) because `useCalls` walks Synthflow pagination sequentially. Scott floated reintroducing Firebase as a cache layer; I recommended trying parallel pagination first before committing to new infrastructure.
 
 ## What just happened
 
-- Closed the prior `n8n-firebase-bridge` branch with a full pivot rationale (`.rsd/docs/2026-04-22-1140-pivot-to-synthflow-direct.md`) and pushed it to origin with upstream set.
-- Cherry-picked `docs/FIRESTORE_SCHEMA.md` onto `main` (commit `0ac9817`) — though it will be deleted as part of the new implementation since there's no Firestore anymore.
-- Branched `synthflow-direct` off updated `main`.
-- Researched Synthflow's public API via their docs (list-calls, subaccounts, agents, authentication, whitelabel-dashboard pages) — findings captured in conversation; key fact is `GET /v2/calls` requires a `model_id` filter.
-- Scott confirmed clients are partitioned by agent IDs (not subaccounts): example IDs `0df733c4-a8fb-4d14-a12a-55fc62396bc7` (OnSite Medical - Dispatch Enrollment) and `48db7b13-e38d-48fe-93ba-d4a0a8f7e05b` (SalesArc - Jessica - Outbound).
-- Wrote the final design spec to `.rsd/docs/2026-04-22-1503-synthflow-direct-design-spec.md` (commit `cebaff5`) — stripped-down architecture, no database, env-var config, single-tenant cloneable.
+- Completed and closed `.rsd/walks/2026-04-22-1523-synthflow-direct-impl.md` — 14 done, 2 deferred, 0 unresolved. Summary block written. `.rsd/walks/ACTIVE` removed.
+- Fast-forward merged `synthflow-direct` → `main`; deployed to Vercel production (`dasharc-local` project), set 6 env vars, added prod origin to the Google OAuth client. Scott + Daniel both signed in successfully.
+- Surfaced load-time pain during the 2026-04-23 demo share with Daniel. Root cause identified: `fetchAllCalls` in `src/hooks/useCallData.js` walks pages serially (~500ms × ~10 pages for 1k records).
+- Drafted three-option analysis for the perf problem; pushed back on the Firebase-as-cache instinct in favor of cheaper options first. No code changes yet.
 
 ## What's open
 
-- Open: implementing the design spec on `synthflow-direct`. Nothing coded yet on this branch beyond the schema doc that will be deleted.
-- Reproduce/check by: `git log --oneline` on `synthflow-direct` shows only schema doc (to delete) and `.rsd/docs/` commits.
-- Next likely action: start the implementation per `.rsd/docs/2026-04-22-1503-synthflow-direct-design-spec.md`. First steps: delete `src/firebase/`, delete `docs/FIRESTORE_SCHEMA.md`, remove `firebase` from `package.json`, add `google-auth-library`, then scaffold `api/verify-token.js`.
+- No active walk. Last walk closed at `dd27e19`.
+- Open: decide the perf fix before starting the next walk. Three options ranked cheapest first:
+  - **A. Parallel pagination** (~30 min): refactor `fetchAllCalls` in `src/hooks/useCallData.js` to fire pages 2..N in parallel after page 1 returns `pagination.total_records`. Expected ~5-8× speedup. No state, no infrastructure.
+  - **B. Edge caching on Vercel** (~1hr): add `Cache-Control: s-maxage=120` to `/api/calls` responses in `api/calls.js`. Helps repeat loads only.
+  - **C. Firebase-as-cache** (Scott's original idea, 1-2 days): re-introduces the thing we just ripped out. Adds cache-invalidation, sync job, new infra. Only reach for this if A+B aren't enough.
+- Reproduce/check by: visit `https://dasharc-local.vercel.app`, sign in, observe ~5-8s first-load in Network tab showing ~10 sequential `/api/calls` requests.
+- Next likely action: start a tiny walk for Option A (or just implement it directly — it's small). Leave B and C on the shelf unless A's benefit is insufficient.
 
 ## Recent decisions
 
-- 2026-04-22: Pivoted away from n8n bridge entirely. Synthflow has a direct API that exposes all call data; scraping n8n workflows is unnecessary.
-- 2026-04-22: No database at all. Allowlist and agent list via env vars (`ALLOWED_EMAILS`, `AGENT_IDS`). Call data live-proxied, never stored. Why: Scott found the Firebase/Firestore/SQLite options over-engineered for what is ultimately a filtered-GUI-on-API.
-- 2026-04-22: Google OAuth via browser GIS library, stateless JWT verification on API side. No Firebase Auth. Why: if we're dropping Firestore, Firebase Auth is the only reason left to keep the Firebase dependency — and Google Sign-In direct is simpler.
-- 2026-04-22: Mock mode dropped. Local dev uses the real Synthflow API key. Why: simpler, and Scott has the key for dev.
-- 2026-04-22 (durable feedback): Do NOT invoke any `superpowers:*` skills on this project — Scott finds them process-heavy. Saved to `memory/feedback_brainstorming_style.md`.
+- 2026-04-23: Deferred Firebase-as-cache pending a cheaper perf attempt (parallel pagination). Reasoning captured in the closed walk's Summary block + this handoff. If A+B together hit sub-second first-load and <100ms repeat, C is unnecessary.
+- 2026-04-22: Kept the `dasharc-local` Vercel project name for production (originally created as a throwaway during `vercel dev` link) rather than creating a fresh one. Cosmetic; can rename later via Vercel dashboard.
+- 2026-04-22: Fast-forward merge (no merge commit) for `synthflow-direct` → `main`. Clean history since main was a direct ancestor.
 
 ## Open threads (not current focus)
 
-- Verify that SalesARC's single Synthflow API key can actually list calls for agents across what we're treating as different "clients" — probably yes (flat agency account), but worth a curl sanity check before committing to the architecture.
-- The agent naming convention (`<Client> - <Purpose>`) is useful — could auto-group agents in the UI by parsing the prefix if that becomes valuable later.
-- `docs/FIRESTORE_SCHEMA.md` on `main` is now moot; delete as part of first implementation commit.
-- Old branch `n8n-firebase-bridge` is preserved on origin with partial work; reusable assets noted in its pivot doc if needed.
-- Vercel env var setup will need to be walked through when we're ready to deploy (`GOOGLE_CLIENT_ID`, `SYNTHFLOW_API_KEY`, `ALLOWED_EMAILS`, `AGENT_IDS`).
+- Item 9 (deferred): silent Google ID token refresh before 1-hour JWT expiry. Users with stale sessions get a generic API error on their next action and must reload to re-sign-in. Fix scope: schedule a `google.accounts.id.prompt()` call N minutes before `exp` from the JWT, feed the fresh token back through `useAuth().signIn`. 30-60 LOC plus edge cases.
+- Item 15 (deferred): delete dead `src/firebase/`, `src/mock/callData.js`, `docs/FIRESTORE_SCHEMA.md`, `firebase` dep in `package.json`, `appConfig.useMockData`, `VITE_USE_MOCK_DATA` env var. Bonus: clears the critical `protobufjs` CVE (transitive via firebase/firestore). ~300 KB bundle shrink. Note: if we pursue Option C (Firebase-as-cache), this cleanup is effectively reversed — so resolve the perf decision before doing item 15.
+- `npm audit` — after item 15 cleanup, re-audit for residual dev-only findings (picomatch, brace-expansion, vite bump).
+- OnSite Medical agent's real call behavior is anomalous: 80% hangup-on-voicemail, 4 "completed" calls with 0-16 char transcripts ending mid-sentence ("human: This is."). Not our bug — real campaign signal. Worth flagging to Jason at some point but doesn't affect dashboard code.
+- Bundle size warning from Vite: 642 KB. Mostly dead firebase weight — item 15 will shrink it naturally. No action needed pre-cleanup.
