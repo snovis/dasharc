@@ -11,6 +11,8 @@ import {
   aggregateOutcomesByAgent,
   aggregateCallsByBucket,
   granularityForPeriod,
+  enumerateBuckets,
+  padBuckets,
 } from '../lib/synthflow'
 
 export default function DashboardPage() {
@@ -36,10 +38,12 @@ export default function DashboardPage() {
     () => aggregateOutcomesByAgent(calls, agents),
     [calls, agents],
   )
-  const overTimeData = useMemo(
-    () => aggregateCallsByBucket(calls, granularityForPeriod(period)),
-    [calls, period],
-  )
+  const overTimeData = useMemo(() => {
+    const granularity = granularityForPeriod(period)
+    const aggregated = aggregateCallsByBucket(calls, granularity)
+    const skeleton = enumerateBuckets(fromDate, toDate, granularity)
+    return padBuckets(skeleton, aggregated)
+  }, [calls, period, fromDate, toDate])
 
   function handleAgentClick(row) {
     if (row?.agentId) navigate(`/agents/${row.agentId}`)

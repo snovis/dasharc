@@ -205,3 +205,84 @@ export function granularityForPeriod(period) {
   if (period === 'all') return 'month'
   return 'day'
 }
+
+// Enumerate every bucket key + label we expect to appear between fromDate
+// and toDate at the given granularity. Used to pad the chart with zero-bars
+// for days/weeks/months where no calls happened, so the time range is
+// visually represented even when the data is sparse.
+//
+// fromDate / toDate are YYYY-MM-DD strings (the dashboard's inclusive range).
+export function enumerateBuckets(fromDate, toDate, granularity) {
+  if (!fromDate || !toDate || granularity === 'month') {
+    // month buckets: no padding — 'all' period has no meaningful range
+    return []
+  }
+
+  const start = new Date(fromDate + 'T00:00:00Z')
+  const end = new Date(toDate + 'T00:00:00Z')
+  if (isNaN(start) || isNaN(end) || end < start) return []
+
+  const keys = []
+  const labels = []
+  const iter = new Date(start)
+
+  if (granularity === 'hour') {
+    // 'today' → 24 hourly buckets from local midnight through local 11 PM.
+    // Keys are still UTC (matching the aggregator), so a call at e.g. UTC 14:00
+    // on a UTC-6 client maps to a local 8 AM bucket whose key is '...T14'.
+    const local = new Date()
+    local.setHours(0, 0, 0, 0)
+    for (let h = 0; h < 24; h++) {
+      const k = local.toISOString().slice(0, 13)
+      keys.push(k)
+      labels.push(local.toLocaleTimeString([], { hour: 'numeric' }))
+      local.setHours(local.getHours() + 1)
+    }
+    return keys.map((k, i) => ({ bucket: k, label: labels[i] }))
+  }
+
+  if (granularity === 'week') {
+    // Walk from the Sunday of `start`'s week through the Sunday of `end`'s week.
+    const cur = new Date(start)
+    cur.setUTCDate(cur.getUTCDate() - cur.getUTCDay())
+    const last = new Date(end)
+    last.setUTCDate(last.getUTCDate() - last.getUTCDay())
+    while (cur <= last) {
+      const k = cur.toISOString().slice(0, 10)
+      const sat = new Date(cur)
+      sat.setUTCDate(sat.getUTCDate() + 6)
+      const fmt = (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      keys.push(k)
+      labels.push(`${fmt(cur)}–${fmt(sat)}`)
+      cur.setUTCDate(cur.getUTCDate() + 7)
+    }
+    return keys.map((k, i) => ({ bucket: k, label: labels[i] }))
+  }
+
+  // Default: day granularity
+  while (iter <= end) {
+    const k = iter.toISOString().slice(0, 10)
+    keys.push(k)
+    labels.push(iter.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' }))
+    iter.setUTCDate(iter.getUTCDate() + 1)
+  }
+  return keys.map((k, i) => ({ bucket: k, label: labels[i] }))
+}
+
+// Merge an enumerated skeleton with aggregated data, preserving skeleton
+// order and zero-filling any empty buckets.
+export function padBuckets(skeleton, aggregated) {
+  if (!skeleton || skeleton.length === 0) return aggregated
+  const map = new Map(aggregated.map((row) => [row.bucket, row]))
+  return skeleton.map(({ bucket, label }) => map.get(bucket) ?? {
+    bucket,
+    label,
+    completed: 0,
+    left_voicemail: 0,
+    hangup_on_voicemail: 0,
+    no_answer: 0,
+    failed: 0,
+    other: 0,
+    total: 0,
+  })
+}
