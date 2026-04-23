@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 const AuthContext = createContext(null)
 const STORAGE_KEY = 'dasharc.auth'
@@ -51,6 +52,7 @@ function clearStoredSession() {
 }
 
 export function AuthProvider({ children }) {
+  const queryClient = useQueryClient()
   const [state, setState] = useState(() => {
     const stored = readStoredSession()
     return stored ?? { idToken: null, user: null }
@@ -61,6 +63,8 @@ export function AuthProvider({ children }) {
     if (!payload?.email) throw new Error('Invalid ID token')
     const expiresAt = (payload.exp || 0) * 1000
     writeStoredSession(token, expiresAt)
+    // New user session — drop any cached data tied to the previous signed-in user.
+    queryClient.clear()
     setState({
       idToken: token,
       user: {
@@ -70,15 +74,16 @@ export function AuthProvider({ children }) {
         sub: payload.sub,
       },
     })
-  }, [])
+  }, [queryClient])
 
   const signOut = useCallback(() => {
     clearStoredSession()
+    queryClient.clear()
     setState({ idToken: null, user: null })
     if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect()
     }
-  }, [])
+  }, [queryClient])
 
   const value = {
     user: state.user,
