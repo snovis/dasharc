@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 5 done · 0 rejected · 0 deferred · 0 modified · 11 unresolved
+Totals: 16 items · 6 done · 0 rejected · 0 deferred · 0 modified · 10 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -67,14 +67,16 @@ done · helper committed; failure paths verified; happy path deferred to item 14
 **Resolution**
 done · handler committed; Synthflow fetch+filter+sanitize verified; auth happy path deferred to item 14.
 
-### 6. Create `api/calls.js` — unresolved
+### 6. Create `api/calls.js` — done
 
 **Recommendation**
 `GET /api/calls?agentId=X&fromDate=Y&toDate=Z` — verify token, verify `agentId` ∈ `AGENT_IDS`, proxy to Synthflow's `list-calls` with `model_id=agentId` and the date params, forward the response. Shape depends on item #1's findings.
 
 **Discussion**
+92-line handler committed at `f6fdb73`. Client contract: camelCase query params (`agentId`, `fromDate`, `toDate`, `limit`, `offset`); proxy translates to Synthflow's snake_case. Auth allowlist: `agentId` must be in `AGENT_IDS`, else 403. `limit` clamped to [1, 100] (Synthflow max), default 100. **Inclusive-toDate magic:** pure `YYYY-MM-DD` inputs get +1 day before upstream call (Synthflow's `to_date` is exclusive); datetime inputs pass through unchanged. Strips `telephony_sip_headers` per design decision. Returns unwrapped `{ calls, pagination }` — drops Synthflow's `{status, response: {...}}` wrapper. Smoke-tested: POST→405; no auth→401; bogus token→401; date-bump helper handles year/month rollovers + datetime/epoch passthrough; live Synthflow pipeline verified — `fromDate=2026-04-20&toDate=2026-04-22` upstreams as `to_date=2026-04-23`, returns 1,032 records (matches item 1 probe exactly), sip_headers confirmed stripped.
 
 **Resolution**
+done · handler committed; full pipeline verified live; auth happy path deferred to item 14.
 
 ### 7. Create `api/call.js` — unresolved
 
