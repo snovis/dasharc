@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 11 done · 0 rejected · 1 deferred · 0 modified · 4 unresolved
+Totals: 16 items · 12 done · 0 rejected · 1 deferred · 0 modified · 3 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -144,14 +144,16 @@ Commit `5bf8464`. Rewrote the file with four labeled sections: App Config (displ
 **Resolution**
 done · `.env.example` reflects the new architecture; each variable documented.
 
-### 13. Update `CLAUDE.md` — unresolved
+### 13. Update `CLAUDE.md` — done
 
 **Recommendation**
 Rewrite the architecture section to reflect: no database, live Synthflow API proxy via Vercel functions, Google OAuth via GIS, env-var-driven allowlist + agent IDs. Remove references to Firestore, n8n, `VITE_USE_MOCK_DATA`. Update the "Data Flow" diagram. Keep the single-tenant cloneable section. Note that Firebase removal is pending the smoke test (final cleanup item).
 
 **Discussion**
+Commit `cd1e1f2` (+109/-58). Full rewrite. New Architecture section with ASCII diagram of the GIS → Vercel /api → Synthflow flow, including per-request verification steps. New "Transitional State" section enumerates the dead code (firebase/, mock/, useMockData) awaiting item 15 so a future Claude session doesn't assume any of it is load-bearing. Kept single-tenant cloneable framing with updated recipe (OAuth client, API key, AGENT_IDS). Documents `vercel dev` vs `npm run dev` distinction for local work.
 
 **Resolution**
+done · CLAUDE.md reflects the Synthflow-direct architecture end to end.
 
 ### 14. Local smoke test with `vercel dev` — unresolved
 
