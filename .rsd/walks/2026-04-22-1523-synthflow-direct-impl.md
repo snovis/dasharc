@@ -2,7 +2,7 @@
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
 Status: in progress
-Totals: 16 items · 1 done · 0 rejected · 0 deferred · 0 modified · 15 unresolved
+Totals: 16 items · 2 done · 0 rejected · 0 deferred · 0 modified · 14 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -23,14 +23,16 @@ Probed live against the OnSite Medical agent. All three sub-questions answered. 
 **Resolution**
 done · API verified live; full shape + gotchas captured in the findings doc; proceed with implementation.
 
-### 2. Set up Google OAuth Client ID — unresolved
+### 2. Set up Google OAuth Client ID — done
 
 **Recommendation**
 Create an OAuth 2.0 client in Google Cloud Console for this deployment. Add authorized JavaScript origins for `http://localhost:5173` (Vite dev) and `http://localhost:3000` (vercel dev) now; add the production Vercel origin when we get there. Capture the resulting Client ID — it becomes `VITE_GOOGLE_CLIENT_ID`.
 
 **Discussion**
+Scott created the OAuth client in Google Cloud Console and added `VITE_GOOGLE_CLIENT_ID` to `.env`. Verified shape: ends with `.apps.googleusercontent.com` as expected. Client secret was correctly not added — GIS ID-token flow doesn't use it. Production origin still needs to be added to the OAuth client's authorized origins when we deploy (tracked in item 16).
 
 **Resolution**
+done · OAuth client created, VITE_GOOGLE_CLIENT_ID in .env, suffix verified.
 
 ### 3. Add `google-auth-library` dependency — unresolved
 
