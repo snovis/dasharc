@@ -3,17 +3,13 @@ import {
 } from 'recharts'
 import { OUTCOME_BUCKETS } from '../../lib/synthflow'
 
-function formatDayTick(iso) {
-  const d = new Date(iso + 'T00:00:00Z')
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
   const total = payload.reduce((sum, p) => sum + (p.value || 0), 0)
   return (
     <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-48">
-      <p className="font-semibold text-slate-800 mb-2">{formatDayTick(label)}</p>
+      <p className="font-semibold text-slate-800 mb-2">{row?.label}</p>
       {payload.filter((p) => p.value > 0).map((p) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
           <div className="flex items-center gap-1.5">
@@ -38,11 +34,11 @@ export default function CallsOverTime({ data }) {
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
         <XAxis
-          dataKey="date"
-          tickFormatter={formatDayTick}
+          dataKey="label"
           tick={{ fontSize: 11, fill: '#94a3b8' }}
           axisLine={false}
           tickLine={false}
+          interval={0}
         />
         <YAxis
           tick={{ fontSize: 11, fill: '#94a3b8' }}

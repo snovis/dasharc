@@ -7,7 +7,11 @@ import CallsOverTime from '../components/charts/CallsOverTime'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
-import { aggregateOutcomesByAgent, aggregateCallsByDay } from '../lib/synthflow'
+import {
+  aggregateOutcomesByAgent,
+  aggregateCallsByBucket,
+  granularityForPeriod,
+} from '../lib/synthflow'
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState('7days')
@@ -32,7 +36,10 @@ export default function DashboardPage() {
     () => aggregateOutcomesByAgent(calls, agents),
     [calls, agents],
   )
-  const overTimeData = useMemo(() => aggregateCallsByDay(calls), [calls])
+  const overTimeData = useMemo(
+    () => aggregateCallsByBucket(calls, granularityForPeriod(period)),
+    [calls, period],
+  )
 
   function handleAgentClick(row) {
     if (row?.agentId) navigate(`/agents/${row.agentId}`)
@@ -72,7 +79,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Calls Over Time" subtitle={periodLabel(period)}>
+          <Card title="Calls Over Time" subtitle={`${periodLabel(period)} · ${granularityLabel(period)}`}>
             {loading ? (
               <div className="flex justify-center py-12"><Spinner /></div>
             ) : (
@@ -103,6 +110,15 @@ function periodLabel(period) {
     '30days': 'Last 30 days',
     all: 'All time',
   }[period] ?? period
+}
+
+function granularityLabel(period) {
+  return {
+    today: 'by hour',
+    '7days': 'by day',
+    '30days': 'by week',
+    all: 'by month',
+  }[period] ?? 'by day'
 }
 
 function SummaryStats({ calls, loading }) {

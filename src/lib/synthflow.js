@@ -128,17 +128,59 @@ export function aggregateOutcomesByAgent(calls, agents) {
   return Array.from(byAgent.values()).sort((a, b) => b.total - a.total)
 }
 
-// Bucket calls by day for the "Calls over time" chart.
-// Returns [{ date: 'YYYY-MM-DD', completed, left_voicemail, ..., total }].
-export function aggregateCallsByDay(calls) {
-  const byDay = new Map()
+// Bucket calls by time for the "Calls over time" chart. Granularity adapts
+// to the period so we always get ~5-7 meaningful bars instead of a single
+// tall bar (for "today") or one bar per day (for "30days" / "all").
+//
+// Returns [{ bucket: '<key>', label: '<display>', ...counts, total }].
+// granularity: 'hour' | 'day' | 'week' | 'month'
+export function aggregateCallsByBucket(calls, granularity = 'day') {
+  const byBucket = new Map()
+
+  function keyOf(t) {
+    if (granularity === 'hour') {
+      return t.toISOString().slice(0, 13) // YYYY-MM-DDTHH
+    }
+    if (granularity === 'week') {
+      // Bucket by the Sunday of the week (UTC). Sunday is day 0.
+      const sunday = new Date(t)
+      sunday.setUTCDate(sunday.getUTCDate() - sunday.getUTCDay())
+      return sunday.toISOString().slice(0, 10)
+    }
+    if (granularity === 'month') {
+      return t.toISOString().slice(0, 7) // YYYY-MM
+    }
+    return t.toISOString().slice(0, 10) // day: YYYY-MM-DD
+  }
+
+  function labelOf(key) {
+    if (granularity === 'hour') {
+      const d = new Date(key + ':00:00Z')
+      return d.toLocaleTimeString([], { hour: 'numeric' })
+    }
+    if (granularity === 'week') {
+      const sun = new Date(key + 'T00:00:00Z')
+      const sat = new Date(sun)
+      sat.setUTCDate(sat.getUTCDate() + 6)
+      const fmt = (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      return `${fmt(sun)}–${fmt(sat)}`
+    }
+    if (granularity === 'month') {
+      const d = new Date(key + '-01T00:00:00Z')
+      return d.toLocaleDateString([], { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    }
+    const d = new Date(key + 'T00:00:00Z')
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  }
+
   for (const call of calls) {
     const t = callTimestamp(call)
     if (!t) continue
-    const day = t.toISOString().slice(0, 10)
-    if (!byDay.has(day)) {
-      byDay.set(day, {
-        date: day,
+    const key = keyOf(t)
+    if (!byBucket.has(key)) {
+      byBucket.set(key, {
+        bucket: key,
+        label: labelOf(key),
         completed: 0,
         left_voicemail: 0,
         hangup_on_voicemail: 0,
@@ -148,10 +190,18 @@ export function aggregateCallsByDay(calls) {
         total: 0,
       })
     }
-    const row = byDay.get(day)
-    const bucket = normalizeStatus(call.call_status)
-    row[bucket]++
+    const row = byBucket.get(key)
+    row[normalizeStatus(call.call_status)]++
     row.total++
   }
-  return Array.from(byDay.values()).sort((a, b) => a.date.localeCompare(b.date))
+  return Array.from(byBucket.values()).sort((a, b) => a.bucket.localeCompare(b.bucket))
+}
+
+// Map dashboard period → bucket granularity.
+export function granularityForPeriod(period) {
+  if (period === 'today') return 'hour'
+  if (period === '7days') return 'day'
+  if (period === '30days') return 'week'
+  if (period === 'all') return 'month'
+  return 'day'
 }
