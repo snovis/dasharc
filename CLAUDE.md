@@ -1,94 +1,145 @@
 # DashARC — Claude Code Reference
 
 ## What This Is
-Interactive call reporting dashboard for SDR (Sales Development Representative) teams.
-Built for SalesARC (client: Jason Nordgren). Hosted on Vercel, data in Firebase.
+Interactive call reporting dashboard for SDR teams on Synthflow. Built for SalesARC (client: Jason Nordgren). Each deployment serves one client and surfaces only the Synthflow agents assigned to them.
 
 ## Stack
-- **Vite + React 18** — frontend build tool and UI framework
-- **Recharts** — horizontal stacked bar charts
-- **Tailwind CSS v4** — utility-first styling (configured via `@tailwindcss/vite` plugin)
-- **TanStack Query** — data fetching and caching
-- **React Router v7** — client-side routing
-- **Firebase** — Firestore (data) + Firebase Auth (auth)
-- **n8n** — external workflow tool that writes Synthflow call data → Firestore
+- **Vite + React 18** — frontend
+- **Tailwind CSS v4** — styling (`@tailwindcss/vite` plugin)
+- **Recharts** — stacked bar + daily volume charts
+- **TanStack Query** — data fetching with paginated Synthflow walks
+- **React Router v7** — client routing
+- **Vercel serverless functions** (`/api/*`) — thin Synthflow proxy, JWT auth gate
+- **Google Sign-In (GIS)** — browser-based ID token issuance
+- **`google-auth-library`** — server-side ID token verification
+- **Synthflow** — source of truth for all call data (no local copy)
 
-## Architecture: Single-Tenant / Cloneable
-This app is designed for one client at a time. To deploy for a new client:
-1. Copy `.env.example` → `.env`
-2. Fill in their Firebase project credentials and company name
-3. Deploy to Vercel (or their own server)
+**No database.** The dashboard is a filtered GUI over Synthflow's API. Allowlist + agent IDs are env-var config.
 
-No multi-tenant SaaS pattern — separate deployment per client.
+## Architecture
+
+```
+┌─────────────────┐         ┌───────────────────┐         ┌─────────────────┐
+│ Browser (React) │──GIS──→ │ Google OAuth      │         │ Synthflow API   │
+│                 │         └───────────────────┘         │ (v2/assistants, │
+│  id_token (JWT) │                                       │  v2/calls)      │
+└────────┬────────┘                                       └────────▲────────┘
+         │ Authorization: Bearer <id_token>                        │
+         ▼                                                         │
+┌─────────────────────────────────────────────┐  Bearer key        │
+│ Vercel serverless /api/*                    │────────────────────┘
+│  - verify-token.js (shared auth helper)     │
+│  - agents.js, calls.js, call.js (proxies)   │
+│  - Reads env vars: VITE_GOOGLE_CLIENT_ID,   │
+│    SYNTHFLOW_API_KEY, ALLOWED_EMAILS,       │
+│    AGENT_IDS                                │
+└─────────────────────────────────────────────┘
+```
+
+Every `/api/*` request flow:
+1. Verify `Authorization: Bearer <google_id_token>` against Google's JWKs
+2. Verify the decoded email is in `ALLOWED_EMAILS`
+3. For per-call/per-agent endpoints: verify `agentId` / `call.model_id` is in `AGENT_IDS`
+4. Forward to Synthflow with the server-side `SYNTHFLOW_API_KEY`
+5. Sanitize (strip prompts, webhook URLs, SIP headers) and return JSON
+
+## Single-Tenant / Cloneable
+
+One Vercel deployment per client. Different clients get different:
+- `ALLOWED_EMAILS` (who can sign in)
+- `AGENT_IDS` (which Synthflow agents they see)
+- `VITE_COMPANY_NAME` / `VITE_APP_NAME` (UI branding)
+
+SalesARC's agency-level Synthflow account and single `SYNTHFLOW_API_KEY` can back all client deployments — the `AGENT_IDS` allowlist partitions visibility. One key, many narrow-scope deployments.
 
 ## Environment Variables
-See `.env.example` for all required variables. Key ones:
-- `VITE_USE_MOCK_DATA=true` — uses `src/mock/callData.js` instead of Firestore (for development)
-- `VITE_FIREBASE_*` — Firebase project credentials
-- `VITE_COMPANY_NAME` / `VITE_APP_NAME` — displayed in the UI
+See `.env.example`. Full list:
+- `VITE_APP_NAME`, `VITE_COMPANY_NAME` — UI display strings
+- `VITE_GOOGLE_CLIENT_ID` — Google OAuth 2.0 Web Client ID (browser-facing)
+- `SYNTHFLOW_API_KEY` — server-side only, **never** prefix with `VITE_`
+- `ALLOWED_EMAILS` — comma-separated, case-insensitive
+- `AGENT_IDS` — comma-separated Synthflow `model_id` UUIDs
 
 ## Key Directories
+
 ```
+api/
+  _lib/verify-token.js   # Shared: verify Google ID token + allowlist
+  agents.js              # GET /api/agents — list filtered to AGENT_IDS
+  calls.js               # GET /api/calls?agentId=&fromDate=&toDate=
+  call.js                # GET /api/call?id=<callId>
 src/
   config/app.js          # Tenant config from env vars
-  firebase/              # Firebase init, auth helpers
-  mock/callData.js       # Mock data + aggregation helpers (matches Firestore shape)
+  lib/synthflow.js       # Status normalization, formatters, transcript parsing
   hooks/
-    useAuth.js           # Auth state (mock-aware)
-    useCallData.js       # Data queries (swap mock ↔ Firestore via env var)
+    useAuth.jsx          # AuthContext: Google ID token + user (sessionStorage)
+    useCallData.js       # useAgents, useCalls, useCall (walks pagination)
   components/
-    charts/              # Recharts chart components
-    dashboard/           # FilterBar, other dashboard-specific components
+    charts/              # CallOutcomesChart, CallsOverTime
+    dashboard/           # FilterBar
     layout/              # Layout shell, ProtectedRoute
-    ui/                  # Shared UI: Card, Spinner
+    ui/                  # Card, Spinner
   pages/
-    LoginPage.jsx
-    DashboardPage.jsx    # Main view: two charts + filter + summary stats
-    AgentDetailPage.jsx  # Per-agent call log table
-    CallDetailPage.jsx   # Individual call metadata + audio/transcript (placeholder)
+    LoginPage.jsx        # Google Sign-In button
+    DashboardPage.jsx    # KPI cards + 2 charts (outcomes + over time)
+    AgentDetailPage.jsx  # Sorted call log table
+    CallDetailPage.jsx   # Metadata + audio + chat transcript + AI judge_results
 ```
 
 ## Data Flow
 ```
-Synthflow (VOIP) → n8n workflow → Firebase Firestore → DashARC React app
-SalesForce (CRM) → n8n workflow → Firebase Firestore (TBD — see open questions)
+Browser ─(Google Sign-In)─→ Google ─(id_token)─→ Browser
+Browser ─(Bearer id_token)─→ /api/* (Vercel) ─(API key)─→ Synthflow ─→ Browser
 ```
 
-## Open Design Questions
-1. **Synthflow audio/transcript access** — How does the dashboard access recordings?
-   - Option A: n8n writes audio URLs + transcripts to Firestore
-   - Option B: Dashboard deep-links into Synthflow UI
-   - Option C: Hybrid
-   - BLOCKS: `CallDetailPage.jsx` audio/transcript sections
-
-2. **Auth roles** — Initial build is manager-only (all agents visible). SDR self-view is future work.
-
-3. **SalesForce integration** — Does data flow through SalesForce or directly Synthflow → n8n → Firebase?
+Every dashboard render that needs fresh data fires Synthflow API calls through the proxy. TanStack Query caches results (2 min for calls, 10 min for agents/single-call detail). Synthflow outage → dashboard shows a "failed to load" banner.
 
 ## Auth
-Firebase Auth with email/password. To add Google OAuth later: add a provider in Firebase console + one `signInWithPopup` call. No structural changes needed.
-
-In mock mode (`VITE_USE_MOCK_DATA=true`), auth is bypassed automatically — no Firebase credentials required for local development.
+- **Google Sign-In** via the `google.accounts.id` browser library (script loaded in `index.html`)
+- Callback hands the ID token to `useAuth().signIn(token)`, which decodes the JWT for `{email, name, picture}` and persists to `sessionStorage` (survives reloads, auto-expires on JWT `exp` claim)
+- API calls attach `Authorization: Bearer <idToken>`; server verifies via `api/_lib/verify-token.js`
+- `ALLOWED_EMAILS` denies 403 if the caller isn't authorized
+- **Silent refresh before 1hr expiry is deferred** (tracked as a known rough edge). Users hitting an expired token get a load error + reload-to-reauth. See `.rsd/walks/` for the deferral notes.
 
 ## Adding a New Client
-1. Create a Firebase project for them
-2. Enable Firestore + Auth (email/password)
-3. Create their admin user in Firebase Auth console
-4. Copy `.env.example` → `.env`, fill in their credentials and company name
-5. Deploy
+1. Google Cloud Console: add the new Vercel production URL to the OAuth client's authorized JavaScript origins (or create a separate OAuth client per deployment)
+2. Identify the Synthflow `model_id`s for their agents in SalesARC's agency account
+3. Copy `.env.example` → `.env`:
+   - `VITE_GOOGLE_CLIENT_ID` — the OAuth client
+   - `SYNTHFLOW_API_KEY` — SalesARC's agency key (same across clients)
+   - `ALLOWED_EMAILS` — the client's users
+   - `AGENT_IDS` — only this client's agent UUIDs
+   - `VITE_APP_NAME` / `VITE_COMPANY_NAME` — branding
+4. Deploy to a fresh Vercel project
+
+No database setup, no user provisioning — just env vars.
 
 ## GitHub
 - Repo: `snovis/dasharc`
-- Collaborator: `emberdark-agent` (Ember)
+- Main branch: `main`
 
 ## Vercel
 - Framework preset: Vite
-- Add all `VITE_*` env vars from `.env` in Vercel project settings
-- Production branch: `main`
+- Serverless functions live in `/api/` (Vercel auto-detects)
+- Set all env vars from `.env` in Project Settings → Environment Variables
+- Local end-to-end dev: `vercel dev` (runs `/api/*` proxies + Vite on one port)
+- Pure-frontend dev: `npm run dev` (no `/api/*` — useful for UI-only work)
 
 ## Commands
 ```bash
-npm run dev      # Start dev server (localhost:5173)
-npm run build    # Build for production
-npm run preview  # Preview production build locally
+npm run dev      # Vite dev server — frontend only (no /api)
+vercel dev       # Vite + serverless functions — full stack
+npm run build    # Production build
+npm run preview  # Preview the production build locally
 ```
+
+## Transitional State (pending item 15 cleanup)
+
+The following are dead code awaiting deletion in the final cleanup:
+- `src/firebase/` — old Firestore + Firebase Auth helpers, unreferenced
+- `src/mock/callData.js` — old mock data, unreferenced
+- `firebase` in `package.json` dependencies — transitive `protobufjs` CVE will self-resolve
+- `appConfig.useMockData` in `src/config/app.js` — defined but unread
+- `VITE_USE_MOCK_DATA` env var — no longer read anywhere
+
+Why they still exist: the `synthflow-direct` pivot kept them in place as a rollback safety net. After the item 14 smoke test validates the new flow end-to-end, they get purged together.
