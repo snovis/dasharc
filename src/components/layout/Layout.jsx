@@ -1,5 +1,4 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { signOut } from '../../firebase/auth'
 import { useAuth } from '../../hooks/useAuth'
 import appConfig from '../../config/app'
 
@@ -9,11 +8,11 @@ const NAV_ITEMS = [
 ]
 
 export default function Layout({ children }) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
-  async function handleSignOut() {
-    await signOut()
+  function handleSignOut() {
+    signOut()
     navigate('/login')
   }
 
