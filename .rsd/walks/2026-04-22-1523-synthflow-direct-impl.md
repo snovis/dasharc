@@ -1,8 +1,9 @@
 # Walk: Synthflow Direct Implementation
 
 Started: 2026-04-22 15:23 · Branch: synthflow-direct · Start commit: c1c35e0
-Status: in progress
-Totals: 16 items · 13 done · 0 rejected · 2 deferred · 0 modified · 1 unresolved
+Finished: 2026-04-23 14:12
+Status: complete
+Totals: 16 items · 14 done · 0 rejected · 2 deferred · 0 modified · 0 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -177,14 +178,16 @@ Smoke test (item 14) passed, so the cleanup is unblocked — but Scott is shippi
 **Resolution**
 deferred · ship first (item 16), clean up tomorrow in a follow-up.
 
-### 16. Deploy first Vercel project — unresolved
+### 16. Deploy first Vercel project — done
 
 **Recommendation**
 Walk through: create Vercel project linked to the repo (production branch `main` — so we'll need to merge `synthflow-direct` → `main` first, or set production to `synthflow-direct` temporarily). Set all env vars (`VITE_GOOGLE_CLIENT_ID`, `SYNTHFLOW_API_KEY`, `ALLOWED_EMAILS`, `AGENT_IDS`, `VITE_COMPANY_NAME`, `VITE_APP_NAME`) in Vercel project settings. Add the production URL to the Google OAuth client's authorized origins. First deploy + smoke test.
 
 **Discussion**
+Fast-forward merged `synthflow-direct` → `main` (no merge commit needed; main was a direct ancestor), pushed. Promoted the existing `dasharc-local` Vercel project (created during `vercel dev` linking) to production — rather than creating a fresh one, since the link was already in place and the name is cosmetic. Set all 6 env vars via piped `vercel env add <NAME> production` (all Production-scope, encrypted). First `vercel --prod` deploy succeeded in ~17s. Stable alias: `https://dasharc-local.vercel.app`. Scott added the production origin to the Google OAuth client's Authorized JavaScript origins and smoke-tested sign-in + dashboard on production. Shared with Daniel the next day (2026-04-23) — he loves the UI but load times are a concern: ~5-8 seconds for the paginated fetch (see flag on this walk for follow-up).
 
 **Resolution**
+done · deployed to `https://dasharc-local.vercel.app`; Daniel using it; performance concern flagged as follow-up work.
 
 ## Flags
 
@@ -206,4 +209,23 @@ Never auto-rewrites items; just a heads-up for when we get there.
 
 ## Summary
 
-<!-- Written by /rsd:walk-done. Empty while the walk is in progress. -->
+Pivoted DashARC from a Firestore-backed app fed by n8n to a stateless React GUI proxying Synthflow directly via Vercel serverless functions. Branch `synthflow-direct` merged fast-forward into `main`; deployed to `https://dasharc-local.vercel.app` on 2026-04-22, shared with Daniel on 2026-04-23.
+
+**Shipped (14 items done):**
+- Verified Synthflow's `list-calls` API contract + captured the full shape (`.rsd/docs/2026-04-22-1631-synthflow-api-findings.md`)
+- Google OAuth client + server-side ID token verification helper (`api/_lib/verify-token.js`)
+- Three `/api/*` serverless proxies with per-call allowlist enforcement and PII sanitization (`agents.js`, `calls.js`, `call.js`)
+- Google Sign-In UI via GIS browser library, `AuthContext` + sessionStorage persistence, TanStack Query cache-clear on signIn/signOut
+- `useCallData` rewrite: `useAgents` / `useCalls` / `useCall` with client-side pagination walking
+- Full UI rewire: status bucket normalization, transcript parsing, dashboard KPI cards + outcomes chart + calls-over-time chart (adaptive granularity + zero-fill), agent detail page with filter/sort/has-transcript controls + URL-backed state, call detail page with audio + chat-bubble transcript + AI judge_results card
+- Progress bar for paginated call fetches (~10 round-trips per 1k records)
+- Media indicators (🎙️/📝) in call log
+- Updated `.env.example` + `CLAUDE.md` to reflect the new architecture
+- Production deploy with env vars + OAuth origin added
+
+**Deferred (2 items, to address in follow-up walks):**
+- item 9: silent token refresh before 1-hour JWT expiry (users with stale sessions currently get an API error and must refresh the page)
+- item 15: delete dead `src/firebase/`, `src/mock/callData.js`, `docs/FIRESTORE_SCHEMA.md`, remove `firebase` from `package.json`, strip `useMockData` remnants. Bonus: clears the critical `protobufjs` CVE that's transitive via firebase.
+
+**New follow-up surfaced by Daniel's feedback:**
+- Load-time performance. Paginated call fetch is ~10 sequential requests × ~500ms each = 5-8 s for a 1k-call period. Cheapest win: parallelize pages 2-N after page 1 returns the total, likely ~5x speedup with no infrastructure change. Larger option (floated by Scott): reintroduce Firebase as a cache layer — worth evaluating against simpler alternatives (edge caching, server-side pre-aggregation) before committing.
