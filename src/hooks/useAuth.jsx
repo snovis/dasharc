@@ -16,6 +16,20 @@ function decodeJWT(token) {
   }
 }
 
+// Normalize across providers. Google tokens carry `email` + `picture`;
+// Microsoft tokens may put the address in `preferred_username` and rarely include `picture`.
+function userFromPayload(payload) {
+  if (!payload) return null
+  const email = payload.email || payload.preferred_username
+  if (!email) return null
+  return {
+    email,
+    name: payload.name,
+    picture: payload.picture,
+    sub: payload.sub,
+  }
+}
+
 function readStoredSession() {
   if (typeof sessionStorage === 'undefined') return null
   try {
@@ -23,17 +37,9 @@ function readStoredSession() {
     if (!raw) return null
     const { idToken, expiresAt } = JSON.parse(raw)
     if (!idToken || !expiresAt || Date.now() >= expiresAt) return null
-    const payload = decodeJWT(idToken)
-    if (!payload?.email) return null
-    return {
-      idToken,
-      user: {
-        email: payload.email,
-        name: payload.name,
-        picture: payload.picture,
-        sub: payload.sub,
-      },
-    }
+    const user = userFromPayload(decodeJWT(idToken))
+    if (!user) return null
+    return { idToken, user }
   } catch {
     return null
   }
@@ -60,20 +66,13 @@ export function AuthProvider({ children }) {
 
   const signIn = useCallback((token) => {
     const payload = decodeJWT(token)
-    if (!payload?.email) throw new Error('Invalid ID token')
+    const user = userFromPayload(payload)
+    if (!user) throw new Error('Invalid ID token')
     const expiresAt = (payload.exp || 0) * 1000
     writeStoredSession(token, expiresAt)
     // New user session — drop any cached data tied to the previous signed-in user.
     queryClient.clear()
-    setState({
-      idToken: token,
-      user: {
-        email: payload.email,
-        name: payload.name,
-        picture: payload.picture,
-        sub: payload.sub,
-      },
-    })
+    setState({ idToken: token, user })
   }, [queryClient])
 
   const signOut = useCallback(() => {

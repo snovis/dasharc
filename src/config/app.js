@@ -6,6 +6,7 @@ const appConfig = {
   companyName: import.meta.env.VITE_COMPANY_NAME || 'SalesARC',
   useMockData: import.meta.env.VITE_USE_MOCK_DATA === 'true',
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  microsoftClientId: import.meta.env.VITE_MICROSOFT_CLIENT_ID || '',
 }
 
 export default appConfig
