@@ -2,7 +2,7 @@
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
 Status: in progress
-Totals: 6 items · 2 done · 0 rejected · 0 deferred · 0 modified · 4 unresolved
+Totals: 6 items · 3 done · 0 rejected · 0 deferred · 0 modified · 3 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -34,14 +34,16 @@ Rewrote with `jose` (`createRemoteJWKSet`, `jwtVerify`, `decodeJwt`). Issuer rou
 **Resolution**
 done · jose-based verifier supports both providers; google-auth-library uninstalled
 
-### 3. Add MSAL.js + Microsoft sign-in button to LoginPage — unresolved
+### 3. Add MSAL.js + Microsoft sign-in button to LoginPage — done
 
 **Recommendation**
 Add MSAL.js setup + a "Sign in with Microsoft" button to `LoginPage.jsx`. Initialize `PublicClientApplication` with the multi-tenant authority and `VITE_MICROSOFT_CLIENT_ID`. Trigger interactive sign-in (`loginPopup` or `loginRedirect`); on success, hand the ID token to `useAuth().signIn(token)`.
 
 **Discussion**
+Long path. First implementation used `loginPopup` — the popup callback URL got stripped by `ProtectedRoute`'s redirect to `/login`, so the parent never saw the auth code and popups never closed. Three speculative fixes failed (catch interaction_in_progress, init MSAL before React, render-null defense in ProtectedRoute). Switched to `loginRedirect` instead — full-page redirect to Microsoft, full-page redirect back. Refactor created `src/lib/msal.js` (singleton + ensureMsalReady) and `src/lib/auth-storage.js` (shared session helpers); `main.jsx` now awaits MSAL init via top-level await before React mounts and writes the ID token to sessionStorage so AuthProvider's initial state picks it up. Also fought a separate Azure misconfig: the App Registration had the redirect URI under "Web" platform (per prior Claude Desktop guidance) instead of "Single-page application", causing `AADSTS70002: must include a 'client_secret'`. Scott flipped it to SPA platform; sign-in works end-to-end in Incognito and (after stale sessionStorage cleared) in normal browsers. Microsoft button verified with `scott.novis@outlook.com`.
 
 **Resolution**
+done · loginRedirect flow works end-to-end (popup approach abandoned); Azure platform config corrected to SPA
 
 ### 4. Update useAuth to handle both providers — unresolved
 
@@ -79,6 +81,8 @@ Never auto-rewrites items; just a heads-up for when we get there.
 -->
 
 - item 2: scope expanded — also includes `npm uninstall google-auth-library` (deferred from item 1 to keep API working between items) · raised after item 1 resolved
+- item 4: already implemented — `userFromPayload` was extracted to `src/lib/auth-storage.js` during the redirect-flow refactor; useAuth imports from there. Likely just needs marking done. · raised after item 3 resolved
+- item 6: scope expanded — also include `scott.novis@outlook.com` (operator/test access; already added to Vercel `ALLOWED_EMAILS`); the original recommendation only listed tamara/ben · raised after item 3 resolved
 
 ## Summary
 
