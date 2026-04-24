@@ -10,7 +10,6 @@ export default function LoginPage() {
   const location = useLocation()
   const buttonRef = useRef(null)
   const [error, setError] = useState('')
-  const [msSigningIn, setMsSigningIn] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -62,32 +61,16 @@ export default function LoginPage() {
 
   async function handleMicrosoftSignIn() {
     setError('')
-    setMsSigningIn(true)
-    const popupOpts = {
-      scopes: ['openid', 'profile', 'email'],
-      prompt: 'select_account',
-    }
     try {
       await ensureMsalReady()
-      let result
-      try {
-        result = await msalInstance.loginPopup(popupOpts)
-      } catch (err) {
-        // Stale interaction state from a prior interrupted attempt blocks new logins.
-        // Clear and retry once.
-        if (err?.errorCode === 'interaction_in_progress') {
-          await msalInstance.clearCache()
-          result = await msalInstance.loginPopup(popupOpts)
-        } else {
-          throw err
-        }
-      }
-      if (!result?.idToken) throw new Error('No ID token returned from Microsoft')
-      signIn(result.idToken)
+      // Full-page redirect to Microsoft. Returns from this point go through
+      // main.jsx's ensureMsalReady → writeAuthSession bridge.
+      await msalInstance.loginRedirect({
+        scopes: ['openid', 'profile', 'email'],
+        prompt: 'select_account',
+      })
     } catch (err) {
       setError(`Microsoft sign-in failed: ${err.message || err}`)
-    } finally {
-      setMsSigningIn(false)
     }
   }
 
@@ -118,12 +101,11 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleMicrosoftSignIn}
-              disabled={msSigningIn}
-              className="w-[280px] h-[44px] flex items-center justify-center gap-3 bg-[#2F2F2F] hover:bg-[#1a1a1a] disabled:opacity-50 text-white font-medium rounded transition-colors"
+              className="w-[280px] h-[44px] flex items-center justify-center gap-3 bg-[#2F2F2F] hover:bg-[#1a1a1a] text-white font-medium rounded transition-colors"
               style={{ fontFamily: 'Segoe UI, system-ui, sans-serif' }}
             >
               <MicrosoftLogo />
-              <span>{msSigningIn ? 'Signing in…' : 'Sign in with Microsoft'}</span>
+              <span>Sign in with Microsoft</span>
             </button>
           )}
 
