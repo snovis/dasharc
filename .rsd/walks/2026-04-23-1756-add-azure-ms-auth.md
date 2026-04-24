@@ -1,7 +1,7 @@
 # Walk: add-azure-ms-auth
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
-Status: in progress
+Status: complete
 Totals: 6 items · 5 done · 1 rejected · 0 deferred · 0 modified · 0 unresolved
 
 <!--
@@ -92,4 +92,10 @@ Never auto-rewrites items; just a heads-up for when we get there.
 
 ## Summary
 
-<!-- Written by /rsd:walk-done. Empty while the walk is in progress. -->
+Added Microsoft Sign-In alongside the existing Google flow so osmedical.net users (tamara, ben) can access the dashboard. Net result: a unified auth pipeline — `jose` verifies both Google and Microsoft JWTs server-side; `@azure/msal-browser` issues Microsoft ID tokens client-side; `userFromPayload` normalizes both providers (with `email` falling back to `preferred_username` for Microsoft).
+
+The walk took a major detour. The popup flow (`loginPopup`) couldn't close — the popup's callback URL was being stripped by ProtectedRoute's redirect to /login, so the parent never saw the auth code. Three speculative fixes failed in sequence (catch interaction_in_progress, init MSAL pre-React, render-null defense in ProtectedRoute) before pivoting to `loginRedirect`, which works cleanly. Required extracting MSAL into `src/lib/msal.js` and a new `src/lib/auth-storage.js` shared by useAuth and main.jsx. Also fought a separate Azure misconfiguration: the App Registration's redirect URI was under "Web" platform (per prior Claude Desktop guidance) instead of "Single-page application", causing `AADSTS70002` (must include client_secret). Scott flipped it; that unblocked sign-in.
+
+Item 4 (useAuth normalize) was rejected as redundant — its work landed organically inside item 3's refactor. Item 6 scope expanded to include `scott.novis@outlook.com` (Scott's operator/test account). Side-fix shipped along the way: `vercel.json` SPA rewrite so direct `/login` navigation no longer 404s. The `.env.example` now documents the SPA-platform requirement so future deployers don't repeat the AADSTS70002 rabbit hole.
+
+End-to-end Microsoft sign-in verified by Scott in production with `scott.novis@outlook.com`. Tamara and Ben's actual first sign-in is not yet observed — they'll confirm on first use.
