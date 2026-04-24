@@ -2,7 +2,7 @@
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
 Status: in progress
-Totals: 6 items · 3 done · 1 rejected · 0 deferred · 0 modified · 2 unresolved
+Totals: 6 items · 4 done · 1 rejected · 0 deferred · 0 modified · 1 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -56,14 +56,16 @@ Already implemented as part of item 3's refactor. `userFromPayload` extracted to
 **Resolution**
 reject · this is already done (delivered as part of the item 3 redirect-flow refactor)
 
-### 5. Add VITE_MICROSOFT_CLIENT_ID to .env.example — unresolved
+### 5. Add VITE_MICROSOFT_CLIENT_ID to .env.example — done
 
 **Recommendation**
 Add `VITE_MICROSOFT_CLIENT_ID` to `.env.example` with a comment describing it as the Azure App Registration client ID (multi-tenant). Document alongside `VITE_GOOGLE_CLIENT_ID`.
 
 **Discussion**
+Added `VITE_MICROSOFT_CLIENT_ID` block with comments warning future deployers about the SPA-vs-Web platform trap (the AADSTS70002 client_secret rabbit hole). Also updated `VITE_GOOGLE_CLIENT_ID` and `ALLOWED_EMAILS` comments to reflect the new "either provider" semantics.
 
 **Resolution**
+done · documented in .env.example with SPA-platform warning to spare future deployers
 
 ### 6. Add osmedical.net users to ALLOWED_EMAILS — unresolved
 
