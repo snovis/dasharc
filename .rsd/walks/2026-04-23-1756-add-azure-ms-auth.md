@@ -2,7 +2,7 @@
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
 Status: in progress
-Totals: 6 items · 4 done · 1 rejected · 0 deferred · 0 modified · 1 unresolved
+Totals: 6 items · 5 done · 1 rejected · 0 deferred · 0 modified · 0 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -67,14 +67,16 @@ Added `VITE_MICROSOFT_CLIENT_ID` block with comments warning future deployers ab
 **Resolution**
 done · documented in .env.example with SPA-platform warning to spare future deployers
 
-### 6. Add osmedical.net users to ALLOWED_EMAILS — unresolved
+### 6. Add osmedical.net users to ALLOWED_EMAILS — done
 
 **Recommendation**
 Add `tamara@osmedical.net` and `ben@osmedical.net` to `ALLOWED_EMAILS` (in production Vercel env vars and `.env` for local). They're the actual reason for this walk — Microsoft auth is the means.
 
 **Discussion**
+Updated Vercel `ALLOWED_EMAILS` via CLI rm + add; full list now: `scott@rymare.com,daniel@salesarcsolutions.com,scott.novis@outlook.com,tamara@osmedical.net,ben@osmedical.net`. Forced redeploy (`vercel deploy --prod`) so warm function instances cycle and pick up the new value. Verified via `vercel env pull`. Scope expanded from the original recommendation to also include `scott.novis@outlook.com` (operator/test access). Local `.env` parity is on Scott. Tamara/Ben's actual sign-in flow is not verified end-to-end here — neither I nor Scott can authenticate as them.
 
 **Resolution**
+done · Vercel allowlist updated and verified; tamara/ben sign-in to be confirmed by them on first use
 
 ## Flags
 
