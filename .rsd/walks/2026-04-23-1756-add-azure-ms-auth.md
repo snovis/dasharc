@@ -2,7 +2,7 @@
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
 Status: in progress
-Totals: 6 items · 0 done · 0 rejected · 0 deferred · 0 modified · 6 unresolved
+Totals: 6 items · 1 done · 0 rejected · 0 deferred · 0 modified · 5 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -12,14 +12,16 @@ affected them. Flags are surfaced in chat and recorded inline, not auto-edited.
 
 ## Items
 
-### 1. Install deps — unresolved
+### 1. Install deps — done
 
 **Recommendation**
 `npm install @azure/msal-browser jose` (and remove `google-auth-library`). One generic JWT library (`jose`) verifies both Google and Microsoft tokens server-side; `@azure/msal-browser` issues Microsoft ID tokens client-side. Library swap; Google sign-in remains fully supported.
 
 **Discussion**
+Installed `@azure/msal-browser ^5.8.0` and `jose ^6.2.2`. `npm run build` green. The `npm uninstall google-auth-library` was deferred to item 2 to avoid leaving the API broken between items — `verify-token.js` still imports `OAuth2Client` until the refactor lands.
 
 **Resolution**
+done · installed @azure/msal-browser + jose; uninstall of google-auth-library deferred to item 2
 
 ### 2. Refactor verify-token.js for both providers — unresolved
 
@@ -73,6 +75,8 @@ Amend-pass notes surface here when a resolution on one item affects another.
 Format: `item N: why flagged · raised after item M resolved`.
 Never auto-rewrites items; just a heads-up for when we get there.
 -->
+
+- item 2: scope expanded — also includes `npm uninstall google-auth-library` (deferred from item 1 to keep API working between items) · raised after item 1 resolved
 
 ## Summary
 
