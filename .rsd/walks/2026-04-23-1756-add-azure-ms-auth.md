@@ -2,7 +2,7 @@
 
 Started: 2026-04-23 17:56 · Branch: main · Start commit: 0edda22
 Status: in progress
-Totals: 6 items · 1 done · 0 rejected · 0 deferred · 0 modified · 5 unresolved
+Totals: 6 items · 2 done · 0 rejected · 0 deferred · 0 modified · 4 unresolved
 
 <!--
 A walk is a living tasklist. Items are resolved one at a time via /rsd:next.
@@ -23,14 +23,16 @@ Installed `@azure/msal-browser ^5.8.0` and `jose ^6.2.2`. `npm run build` green.
 **Resolution**
 done · installed @azure/msal-browser + jose; uninstall of google-auth-library deferred to item 2
 
-### 2. Refactor verify-token.js for both providers — unresolved
+### 2. Refactor verify-token.js for both providers — done
 
 **Recommendation**
 Refactor `api/_lib/verify-token.js` to verify both Google + Microsoft JWTs via `jose`. Read the `iss` claim → pick the right JWKs URL (Google: `https://www.googleapis.com/oauth2/v3/certs`, Microsoft: `https://login.microsoftonline.com/common/discovery/v2.0/keys`) and audience (Google client ID or Microsoft client ID) → verify. `ALLOWED_EMAILS` check applies after, unchanged.
 
 **Discussion**
+Rewrote with `jose` (`createRemoteJWKSet`, `jwtVerify`, `decodeJwt`). Issuer routing: Google issuers are a fixed allowlist; Microsoft issuer is matched via regex (`/^https:\/\/login\.microsoftonline\.com\/[0-9a-f-]+\/v2\.0$/`) since multi-tenant tokens carry the user's tenant GUID, not "common". JWKs are fetched from `/common/discovery/v2.0/keys` regardless. Email handling: Google uses `email` + `email_verified`; Microsoft falls back to `preferred_username` if `email` claim absent (no `email_verified` — work accounts presumed verified). Return value adds `provider` field. Server-misconfig check now requires *at least one* client ID rather than only Google. Uninstalled `google-auth-library` (the deferred scope expansion from item 1's flag). `node --check` passes; `npm run build` green.
 
 **Resolution**
+done · jose-based verifier supports both providers; google-auth-library uninstalled
 
 ### 3. Add MSAL.js + Microsoft sign-in button to LoginPage — unresolved
 
