@@ -82,12 +82,25 @@ export default function LoginPage() {
   async function handleMicrosoftSignIn() {
     setError('')
     setMsSigningIn(true)
+    const popupOpts = {
+      scopes: ['openid', 'profile', 'email'],
+      prompt: 'select_account',
+    }
     try {
       await ensureMsalReady()
-      const result = await msalInstance.loginPopup({
-        scopes: ['openid', 'profile', 'email'],
-        prompt: 'select_account',
-      })
+      let result
+      try {
+        result = await msalInstance.loginPopup(popupOpts)
+      } catch (err) {
+        // Stale interaction state from a prior interrupted attempt blocks new logins.
+        // Clear and retry once.
+        if (err?.errorCode === 'interaction_in_progress') {
+          await msalInstance.clearCache()
+          result = await msalInstance.loginPopup(popupOpts)
+        } else {
+          throw err
+        }
+      }
       if (!result?.idToken) throw new Error('No ID token returned from Microsoft')
       signIn(result.idToken)
     } catch (err) {
