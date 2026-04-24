@@ -1,27 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { PublicClientApplication } from '@azure/msal-browser'
 import { useAuth } from '../hooks/useAuth'
 import appConfig from '../config/app'
-
-// MSAL singleton — only instantiated if Microsoft is configured for this deployment.
-const msalInstance = appConfig.microsoftClientId
-  ? new PublicClientApplication({
-      auth: {
-        clientId: appConfig.microsoftClientId,
-        authority: 'https://login.microsoftonline.com/common',
-        redirectUri: typeof window !== 'undefined' ? window.location.origin : '',
-      },
-      cache: { cacheLocation: 'sessionStorage' },
-    })
-  : null
-
-let msalReady = null
-function ensureMsalReady() {
-  if (!msalInstance) return Promise.resolve(false)
-  if (!msalReady) msalReady = msalInstance.initialize().then(() => true)
-  return msalReady
-}
+import { msalInstance, ensureMsalReady } from '../lib/msal'
 
 export default function LoginPage() {
   const { user, signIn } = useAuth()
