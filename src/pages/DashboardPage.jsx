@@ -11,19 +11,22 @@ import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
 import {
   aggregateOutcomesByAgent,
   aggregateCallsByBucket,
-  granularityForPeriod,
+  granularityForRange,
   enumerateBuckets,
   padBuckets,
 } from '../lib/synthflow'
 
+function defaultFilter() {
+  return { period: '7days', ...periodToDateRange('7days') }
+}
+
 export default function DashboardPage() {
-  const [period, setPeriod] = useState('7days')
+  const [filter, setFilter] = useState(defaultFilter)
+  const { fromDate, toDate } = filter
   const navigate = useNavigate()
 
   const agentsQ = useAgents()
   const agents = agentsQ.data ?? []
-
-  const { fromDate, toDate } = useMemo(() => periodToDateRange(period), [period])
 
   // With a typical deployment targeting a single agent, we fetch its calls directly.
   // Multi-agent deployments would fan out; for now we just use the first agent.
@@ -39,12 +42,15 @@ export default function DashboardPage() {
     () => aggregateOutcomesByAgent(calls, agents),
     [calls, agents],
   )
+  const granularity = useMemo(
+    () => granularityForRange(fromDate, toDate),
+    [fromDate, toDate],
+  )
   const overTimeData = useMemo(() => {
-    const granularity = granularityForPeriod(period)
     const aggregated = aggregateCallsByBucket(calls, granularity)
     const skeleton = enumerateBuckets(fromDate, toDate, granularity)
     return padBuckets(skeleton, aggregated)
-  }, [calls, period, fromDate, toDate])
+  }, [calls, granularity, fromDate, toDate])
 
   function handleAgentClick(row) {
     if (row?.agentId) navigate(`/agents/${row.agentId}`)
@@ -63,7 +69,7 @@ export default function DashboardPage() {
               {agents.length > 1 ? 'Click any agent row to drill into their calls' : 'Live data from Synthflow'}
             </p>
           </div>
-          <FilterBar period={period} onChange={setPeriod} />
+          <FilterBar filter={filter} onChange={setFilter} />
         </div>
 
         {error && (
@@ -73,7 +79,7 @@ export default function DashboardPage() {
         <SummaryStats calls={calls} loading={loading} />
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card title="Call Outcomes" subtitle={periodLabel(period)}>
+          <Card title="Call Outcomes" subtitle={filterLabel(filter)}>
             {loading ? (
               <ProgressBar loaded={callsQ.progress?.loaded ?? 0} total={callsQ.progress?.total ?? 0} />
             ) : (
@@ -84,7 +90,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Calls Over Time" subtitle={`${periodLabel(period)} · ${granularityLabel(period)}`}>
+          <Card title="Calls Over Time" subtitle={`${filterLabel(filter)} · ${granularityLabel(granularity)}`}>
             {loading ? (
               <ProgressBar loaded={callsQ.progress?.loaded ?? 0} total={callsQ.progress?.total ?? 0} />
             ) : (
@@ -108,22 +114,38 @@ export default function DashboardPage() {
   )
 }
 
-function periodLabel(period) {
+function filterLabel(filter) {
+  if (filter.period === 'custom') {
+    if (filter.fromDate === filter.toDate) return formatYmd(filter.fromDate)
+    return `${formatYmd(filter.fromDate)} – ${formatYmd(filter.toDate)}`
+  }
   return {
     today: 'Today',
     '7days': 'Last 7 days',
     '30days': 'Last 30 days',
     all: 'All time',
-  }[period] ?? period
+  }[filter.period] ?? filter.period
 }
 
-function granularityLabel(period) {
+function granularityLabel(granularity) {
   return {
-    today: 'by hour',
-    '7days': 'by day',
-    '30days': 'by week',
-    all: 'by month',
-  }[period] ?? 'by day'
+    hour: 'by hour',
+    day: 'by day',
+    week: 'by week',
+    month: 'by month',
+  }[granularity] ?? 'by day'
+}
+
+function formatYmd(ymd) {
+  if (!ymd) return ''
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (!y || !m || !d) return ymd
+  const date = new Date(y, m - 1, d)
+  const thisYear = new Date().getFullYear()
+  const opts = y === thisYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' }
+  return date.toLocaleDateString('en-US', opts)
 }
 
 function SummaryStats({ calls, loading }) {

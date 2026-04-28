@@ -197,13 +197,18 @@ export function aggregateCallsByBucket(calls, granularity = 'day') {
   return Array.from(byBucket.values()).sort((a, b) => a.bucket.localeCompare(b.bucket))
 }
 
-// Map dashboard period → bucket granularity.
-export function granularityForPeriod(period) {
-  if (period === 'today') return 'hour'
-  if (period === '7days') return 'day'
-  if (period === '30days') return 'week'
-  if (period === 'all') return 'month'
-  return 'day'
+// Pick a bucket granularity that fits a date range.
+// Both inputs are YYYY-MM-DD; the range is inclusive.
+export function granularityForRange(fromDate, toDate) {
+  if (!fromDate || !toDate) return 'month'
+  const start = new Date(fromDate + 'T00:00:00Z')
+  const end = new Date(toDate + 'T00:00:00Z')
+  if (isNaN(start) || isNaN(end) || end < start) return 'day'
+  const days = Math.round((end - start) / 86400000) + 1
+  if (days <= 1) return 'hour'
+  if (days <= 14) return 'day'
+  if (days <= 90) return 'week'
+  return 'month'
 }
 
 // Enumerate every bucket key + label we expect to appear between fromDate

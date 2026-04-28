@@ -36,6 +36,8 @@ export default function AgentDetailPage() {
   // URL query params are the source of truth so filter/sort state survives
   // navigation (e.g. clicking into a call detail and hitting back).
   const period = searchParams.get('period') ?? '7days'
+  const fromParam = searchParams.get('from')
+  const toParam = searchParams.get('to')
   const filterStatus = searchParams.get('filter') ?? 'all'
   const sortBy = searchParams.get('sort') ?? 'newest'
   const hasTranscript = searchParams.get('transcript') === '1'
@@ -48,15 +50,38 @@ export default function AgentDetailPage() {
       return next
     })
   }
-  const setPeriod = (v) => updateParam('period', v, '7days')
   const setFilterStatus = (v) => updateParam('filter', v, 'all')
   const setSortBy = (v) => updateParam('sort', v, 'newest')
   const setHasTranscript = (v) => updateParam('transcript', v, false)
 
+  const filter = useMemo(() => {
+    if (period === 'custom' && fromParam && toParam) {
+      return { period: 'custom', fromDate: fromParam, toDate: toParam }
+    }
+    return { period, ...periodToDateRange(period) }
+  }, [period, fromParam, toParam])
+
+  function setFilter(next) {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev)
+      if (next.period === 'custom') {
+        sp.set('period', 'custom')
+        sp.set('from', next.fromDate)
+        sp.set('to', next.toDate)
+      } else {
+        if (next.period === '7days') sp.delete('period')
+        else sp.set('period', next.period)
+        sp.delete('from')
+        sp.delete('to')
+      }
+      return sp
+    })
+  }
+
   const agentsQ = useAgents()
   const agent = agentsQ.data?.find((a) => a.model_id === agentId)
 
-  const { fromDate, toDate } = useMemo(() => periodToDateRange(period), [period])
+  const { fromDate, toDate } = filter
   const callsQ = useCalls({ agentId, fromDate, toDate })
 
   const calls = callsQ.data ?? []
@@ -103,7 +128,7 @@ export default function AgentDetailPage() {
               {agent?.type === 'outbound' ? 'Outbound' : agent?.type === 'inbound' ? 'Inbound' : 'Agent'} · Call history
             </p>
           </div>
-          <FilterBar period={period} onChange={setPeriod} />
+          <FilterBar filter={filter} onChange={setFilter} />
         </div>
 
         {!callsQ.isPending && !callsQ.isError && (
