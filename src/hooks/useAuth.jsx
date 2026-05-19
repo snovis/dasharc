@@ -14,9 +14,30 @@ export function AuthProvider({ children }) {
     const stored = readAuthSession()
     return stored ?? { idToken: null, user: null }
   })
-  const [signOutReason, setSignOutReason] = useState(null)
+  // On first paint, also pick up any sign-in error stashed by the Microsoft
+  // redirect flow in main.jsx — it can't show its own UI, so it leaves a
+  // message here for the login page to display.
+  const [signOutReason, setSignOutReason] = useState(() => {
+    try {
+      const err = sessionStorage.getItem('dasharc.signInError')
+      if (err) sessionStorage.removeItem('dasharc.signInError')
+      return err
+    } catch {
+      return null
+    }
+  })
 
-  const signIn = useCallback((token) => {
+  const signIn = useCallback(async (token) => {
+    // Verify server-side (signature + allowlist) BEFORE accepting the session
+    // client-side. Without this, unauthorized users briefly see the dashboard
+    // chrome while the first data fetch races a 403.
+    const res = await fetch('/api/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Sign-in rejected (HTTP ${res.status})`)
+    }
     const session = writeAuthSession(token)
     if (!session) throw new Error('Invalid ID token')
     // New user session — drop any cached data tied to the previous signed-in user.

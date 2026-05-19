@@ -41,9 +41,10 @@ export default function LoginPage() {
       }
       window.google.accounts.id.initialize({
         client_id: appConfig.googleClientId,
-        callback: (response) => {
+        callback: async (response) => {
+          setError('')
           try {
-            signIn(response.credential)
+            await signIn(response.credential)
           } catch (err) {
             setError(`Sign-in failed: ${err.message}`)
           }
