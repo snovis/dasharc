@@ -5,11 +5,16 @@ import appConfig from '../config/app'
 import { msalInstance, ensureMsalReady } from '../lib/msal'
 
 export default function LoginPage() {
-  const { user, signIn } = useAuth()
+  const { user, signIn, signOutReason } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const buttonRef = useRef(null)
   const [error, setError] = useState('')
+
+  // Surface the reason the auth provider kicked the user back here (expired
+  // token, allowlist removal, etc.) so they understand why they're seeing the
+  // login screen and what to do next.
+  const displayError = error || signOutReason || ''
 
   useEffect(() => {
     if (user) {
@@ -109,8 +114,8 @@ export default function LoginPage() {
             </button>
           )}
 
-          {error && (
-            <p className="text-red-400 text-xs text-center">{error}</p>
+          {displayError && (
+            <p className="text-red-400 text-xs text-center">{displayError}</p>
           )}
           <p className="text-slate-500 text-xs text-center">
             Only emails in this deployment's allowlist can access the dashboard.
