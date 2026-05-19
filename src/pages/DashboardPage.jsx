@@ -8,6 +8,7 @@ import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 import ProgressBar from '../components/ui/ProgressBar'
 import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
+import { useAuth } from '../hooks/useAuth'
 import {
   aggregateOutcomesByAgent,
   aggregateCallsByBucket,
@@ -69,7 +70,10 @@ export default function DashboardPage() {
               {agents.length > 1 ? 'Click any agent row to drill into their calls' : 'Live data from Synthflow'}
             </p>
           </div>
-          <FilterBar filter={filter} onChange={setFilter} />
+          <div className="flex items-center gap-3">
+            <DemoCallButton />
+            <FilterBar filter={filter} onChange={setFilter} />
+          </div>
         </div>
 
         {error && (
@@ -194,5 +198,106 @@ function ErrorBanner({ error }) {
         {!status && (error?.message || 'Unknown error.')}
       </p>
     </div>
+  )
+}
+
+function DemoCallButton() {
+  const [open, setOpen] = useState(false)
+  const [phone, setPhone] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [status, setStatus] = useState(null) // null | 'loading' | 'success' | 'error'
+  const { idToken } = useAuth()
+
+  async function handleSubmit() {
+    if (!phone) return
+    setStatus('loading')
+    try {
+      const res = await fetch('/api/demo-trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ phone, first_name: firstName }),
+      })
+      
+      if (res.ok) {
+        setStatus('success')
+        setTimeout(() => {
+          setOpen(false)
+          setStatus(null)
+          setPhone('')
+          setFirstName('')
+        }, 2000)
+      } else {
+        setStatus('error')
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+      >
+        Demo Call
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">Trigger Demo Call</h2>
+
+            <div>
+              <label className="text-xs font-medium text-slate-500">First Name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                placeholder="John"
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-slate-500">Phone Number (US)</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+12025550123"
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {status === 'success' && (
+              <p className="text-sm text-green-600">✓ Call triggered successfully!</p>
+            )}
+            {status === 'error' && (
+              <p className="text-sm text-red-600">Failed to trigger call. Try again.</p>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setOpen(false); setStatus(null) }}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={status === 'loading' || !phone}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {status === 'loading' ? 'Calling...' : 'Start Call'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

@@ -143,3 +143,22 @@ The following are dead code awaiting deletion in the final cleanup:
 - `VITE_USE_MOCK_DATA` env var — no longer read anywhere
 
 Why they still exist: the `synthflow-direct` pivot kept them in place as a rollback safety net. After the item 14 smoke test validates the new flow end-to-end, they get purged together.
+
+## Demo Call Button
+
+A "Demo Call" button lives on the DashboardPage. It opens a modal where an authorized user enters a first name and US phone number, then triggers a Synthflow outbound call via n8n.
+
+### How it works
+Browser → `/api/demo-trigger` (Vercel serverless) → `N8N_DEMO_TRIGGER_URL` (n8n webhook) → Synthflow API → outbound call
+
+### Environment variable
+`N8N_DEMO_TRIGGER_URL` — the n8n webhook URL that accepts `{ phone, first_name }` and triggers the call. Set to the SalesARC-owned n8n instance:
+`https://salesarcsolutions.app.n8n.cloud/webhook/onsite-demo-trigger`
+
+### n8n workflow
+Workflow: `OnSite-Manual-Demo-Trigger-v1` in the `onSite-Medical2` folder on `salesarcsolutions.app.n8n.cloud`.
+Synthflow agent: `OnSite Medical - Dispatch Enrollment Assistant` (model_id: `0df733c4-a8fb-4d14-a12a-55fc62396bc7`).
+Request shape: `{ phone: string, first_name: string }`.
+
+### Access control
+Any email in `ALLOWED_EMAILS` can trigger demo calls. No role gating. No server-side phone format validation or rate limiting currently — add if needed.
