@@ -33,9 +33,10 @@ export async function verifyRequest(req) {
       500,
     );
   }
-  if (ALLOWED_EMAILS.length === 0) {
-    throw new AuthError('Server misconfigured: ALLOWED_EMAILS not set', 500);
-  }
+  // ALLOWED_EMAILS is optional: in the multi-tenant (droplet) deployment the
+  // YAML config is the authoritative allowlist, and this env var is left unset.
+  // In the legacy single-tenant (Vercel) deployment it's still required — but
+  // we treat its absence as "no env-level gate" rather than misconfiguration.
 
   const authHeader = req.headers.authorization || req.headers.Authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -90,7 +91,8 @@ export async function verifyRequest(req) {
   }
 
   const email = String(emailRaw).toLowerCase();
-  if (!ALLOWED_EMAILS.includes(email)) {
+  // Env-level gate is checked only when set — see note in the misconfig guard above.
+  if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(email)) {
     throw new AuthError(`Email ${email} is not authorized for this deployment`, 403);
   }
 

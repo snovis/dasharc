@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useRef, useState, useMemo } from 'react'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { useAuth } from './useAuth'
 
 async function authedFetch(url, idToken) {
@@ -17,11 +17,14 @@ async function authedFetch(url, idToken) {
 
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
-export function useAgents() {
+export function useAgents({ accountId } = {}) {
   const { idToken } = useAuth()
+  const url = accountId
+    ? `/api/agents?accountId=${encodeURIComponent(accountId)}`
+    : '/api/agents'
   return useQuery({
-    queryKey: ['agents'],
-    queryFn: async () => (await authedFetch('/api/agents', idToken)).agents ?? [],
+    queryKey: ['agents', accountId ?? null],
+    queryFn: async () => (await authedFetch(url, idToken)).agents ?? [],
     enabled: !!idToken,
     staleTime: 1000 * 60 * 10,
   })
@@ -111,6 +114,55 @@ export function useCalls({ agentId, fromDate, toDate }) {
   })
 
   return { ...query, progress }
+}
+
+// Multi-agent fan-out: fires useCalls in parallel for each provided agentId
+// and returns the concatenated result. Used when the dashboard's agent
+// selector is set to "All agents" within an account.
+//
+// Errors and pending states aggregate: any pending → pending; any error → error.
+// Progress aggregates loaded/total across all agents so the progress bar
+// reflects the total work in flight.
+export function useCallsForAgents({ agentIds, fromDate, toDate }) {
+  const { idToken } = useAuth()
+  const [progressByAgent, setProgressByAgent] = useState({})
+
+  const queries = useQueries({
+    queries: (agentIds ?? []).map((agentId) => ({
+      queryKey: ['calls', agentId, fromDate, toDate],
+      queryFn: () =>
+        fetchAllCalls({
+          idToken,
+          agentId,
+          fromDate,
+          toDate,
+          onProgress: (loaded, total) =>
+            setProgressByAgent((prev) => ({ ...prev, [agentId]: { loaded, total } })),
+        }),
+      enabled: !!idToken && !!agentId,
+      staleTime: 1000 * 60 * 2,
+    })),
+  })
+
+  const isPending = queries.some((q) => q.isPending)
+  const isError = queries.some((q) => q.isError)
+  const error = queries.find((q) => q.isError)?.error
+
+  const calls = useMemo(() => {
+    if (isPending || isError) return []
+    return queries.flatMap((q) => q.data ?? [])
+  }, [queries, isPending, isError])
+
+  const progress = useMemo(() => {
+    let loaded = 0, total = 0
+    for (const p of Object.values(progressByAgent)) {
+      loaded += p.loaded ?? 0
+      total += p.total ?? 0
+    }
+    return { loaded, total }
+  }, [progressByAgent])
+
+  return { data: calls, isPending, isError, error, progress }
 }
 
 export function useCall(callId) {

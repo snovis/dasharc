@@ -4,7 +4,10 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n vite,api -c cyan,magenta \"vite\" \"node --watch --env-file=.env server/index.js\"",
+    "dev:web": "vite",
+    "dev:api": "node --watch --env-file=.env server/index.js",
+    "start": "node --env-file=.env server/index.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -12,12 +15,14 @@
   "dependencies": {
     "@azure/msal-browser": "^5.8.0",
     "@tanstack/react-query": "^5.95.0",
+    "express": "^5.2.1",
     "firebase": "^12.11.0",
     "jose": "^6.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -25,6 +30,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

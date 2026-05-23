@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import FilterBar from '../components/dashboard/FilterBar'
+import { AgentSelector } from '../components/dashboard/ContextSelector'
 import CallOutcomesChart from '../components/charts/CallOutcomesChart'
 import CallsOverTime from '../components/charts/CallsOverTime'
 import Card from '../components/ui/Card'
-import Spinner from '../components/ui/Spinner'
 import ProgressBar from '../components/ui/ProgressBar'
-import { useAgents, useCalls, periodToDateRange } from '../hooks/useCallData'
+import { useAgents, useCalls, useCallsForAgents, periodToDateRange } from '../hooks/useCallData'
 import { useAuth } from '../hooks/useAuth'
+import { useSelection } from '../hooks/useSelection'
 import {
   aggregateOutcomesByAgent,
   aggregateCallsByBucket,
@@ -26,22 +27,45 @@ export default function DashboardPage() {
   const { fromDate, toDate } = filter
   const navigate = useNavigate()
 
-  const agentsQ = useAgents()
-  const agents = agentsQ.data ?? []
+  const { account, accountId, agents: selectionAgents, agentId, isAllAgents, selectedAgent } = useSelection()
 
-  // With a typical deployment targeting a single agent, we fetch its calls directly.
-  // Multi-agent deployments would fan out; for now we just use the first agent.
-  const primaryAgent = agents[0]
-  const callsQ = useCalls({
-    agentId: primaryAgent?.model_id,
+  // Synthflow metadata for the agents in the selected account.
+  // (Names, types, etc. — joined with the calls below for chart labels.)
+  const agentsQ = useAgents({ accountId })
+  const allAccountAgents = agentsQ.data ?? []
+
+  // Decide which agents' calls to fetch.
+  const agentIdsToFetch = useMemo(() => {
+    if (!account) return []
+    if (isAllAgents) return selectionAgents.map((a) => a.id)
+    return agentId ? [agentId] : []
+  }, [account, isAllAgents, selectionAgents, agentId])
+
+  // For a single agent we keep the old single-agent hook (paged progress UX);
+  // for "all", fan out across the account's agents.
+  const singleAgentQ = useCalls({
+    agentId: isAllAgents ? null : agentId,
     fromDate,
     toDate,
   })
+  const multiAgentQ = useCallsForAgents({
+    agentIds: isAllAgents ? agentIdsToFetch : [],
+    fromDate,
+    toDate,
+  })
+
+  const callsQ = isAllAgents ? multiAgentQ : singleAgentQ
   const calls = callsQ.data ?? []
 
+  // For chart labels, we want Synthflow metadata for the agents in scope.
+  const agentsInScope = useMemo(() => {
+    if (isAllAgents) return allAccountAgents
+    return allAccountAgents.filter((a) => a.model_id === agentId)
+  }, [allAccountAgents, isAllAgents, agentId])
+
   const outcomesData = useMemo(
-    () => aggregateOutcomesByAgent(calls, agents),
-    [calls, agents],
+    () => aggregateOutcomesByAgent(calls, agentsInScope),
+    [calls, agentsInScope],
   )
   const granularity = useMemo(
     () => granularityForRange(fromDate, toDate),
@@ -57,21 +81,28 @@ export default function DashboardPage() {
     if (row?.agentId) navigate(`/agents/${row.agentId}`)
   }
 
-  const loading = agentsQ.isPending || (primaryAgent && callsQ.isPending)
+  const loading = agentsQ.isPending || callsQ.isPending
   const error = agentsQ.isError || callsQ.isError
+
+  const subtitleAgentLabel = isAllAgents
+    ? `${selectionAgents.length} agents`
+    : selectedAgent?.name ?? 'No agent selected'
 
   return (
     <Layout>
       <div className="px-8 py-6 space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Call Activity Dashboard</h1>
+            <h1 className="text-xl font-semibold text-slate-900">
+              Call Activity Dashboard
+            </h1>
             <p className="text-sm text-slate-400 mt-0.5">
-              {agents.length > 1 ? 'Click any agent row to drill into their calls' : 'Live data from Synthflow'}
+              {account?.name ? `${account.name} · ${subtitleAgentLabel}` : 'Live data from Synthflow'}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <DemoCallButton />
+            <AgentSelector />
+            {account?.demo_trigger_url && <DemoCallButton accountId={accountId} />}
             <FilterBar filter={filter} onChange={setFilter} />
           </div>
         </div>
@@ -89,7 +120,7 @@ export default function DashboardPage() {
             ) : (
               <CallOutcomesChart
                 data={outcomesData}
-                onAgentClick={agents.length > 1 ? handleAgentClick : undefined}
+                onAgentClick={agentsInScope.length > 1 ? handleAgentClick : undefined}
               />
             )}
           </Card>
@@ -103,10 +134,10 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {agents.length === 1 && primaryAgent && (
-          <Card title={`${primaryAgent.name}`} subtitle="Open call log">
+        {!isAllAgents && selectedAgent && (
+          <Card title={selectedAgent.name} subtitle="Open call log">
             <button
-              onClick={() => navigate(`/agents/${primaryAgent.model_id}`)}
+              onClick={() => navigate(`/agents/${selectedAgent.id}`)}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               View all calls →
@@ -201,7 +232,7 @@ function ErrorBanner({ error }) {
   )
 }
 
-function DemoCallButton() {
+function DemoCallButton({ accountId }) {
   const [open, setOpen] = useState(false)
   const [phone, setPhone] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -212,7 +243,7 @@ function DemoCallButton() {
     if (!phone) return
     setStatus('loading')
     try {
-      const res = await fetch('/api/demo-trigger', {
+      const res = await fetch(`/api/demo-trigger?accountId=${encodeURIComponent(accountId)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -220,7 +251,7 @@ function DemoCallButton() {
         },
         body: JSON.stringify({ phone, first_name: firstName }),
       })
-      
+
       if (res.ok) {
         setStatus('success')
         setTimeout(() => {
