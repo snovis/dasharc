@@ -1,38 +1,42 @@
 # Handoff
 
-Written: 2026-05-14 10:44 · Context used: unknown
-Branch: main · Last commit: ed7a8aa
+Written: 2026-05-22 18:50 PT · Context used: (unavailable)
+Branch: multi-tenant · Last commit: 43deb29
 
 ## What we're working on
 
-Still onboarding Mnatalis (oksklient@gmail.com) as the second developer/user on DashARC. Earlier this session: GitHub collaborator + branch protection. Now: dashboard sign-in access via `ALLOWED_EMAILS`, deployed to prod.
+Multi-tenant rebuild of DashARC, now serving at https://dashboard.rymare.com from Scott's DigitalOcean droplet (the same box that runs n8n + Rocket Chat). The old Vercel single-tenant model is being replaced by a YAML-config-driven dashboard where one URL serves N customer accounts; SalesARC support staff have wildcard access to every account.
+
+Slice: PR #2 (https://github.com/snovis/dasharc/pull/2) on branch `multi-tenant`. Vercel deployment on `main` is still live as a rollback path.
 
 ## What just happened
 
-- Edited local `.env` to append `oksklient@gmail.com` to `ALLOWED_EMAILS`. `.env` is gitignored so it stays uncommitted by design.
-- Replaced Vercel **production** env var `ALLOWED_EMAILS` (via `vercel env rm` + `vercel env add`). Both CLI calls returned success.
-- Ran `vercel --prod` — build succeeded (786 modules, 1.11s), deployed `dpl_HK71sPBPcGkueB2xw2eej9tFmBx2`, status `READY`, aliased to https://dasharc-local.vercel.app. New ALLOWED_EMAILS list is now active on the running deployment.
-- Bundle warning unchanged: 868 KB main chunk — same dead-firebase weight that item 15 cleanup is set to resolve.
+- Express server in `server/` deployed to `/opt/dasharc/` on the droplet, running as `dasharc-api.service` (systemd, `127.0.0.1:4100`). Verified via `journalctl -u dasharc-api` showing "2 accounts, 10 users" + 200 on `/api/health`.
+- nginx vhost at `/etc/nginx/sites-available/dasharc` proxies `/api/*` to the Node service and serves `/opt/dasharc/dist` for the SPA. Let's Encrypt cert issued for `dashboard.rymare.com` (auto-renew via certbot).
+- Frontend: sidebar `AccountSelector` (collapses to plain label for 1-account users), header `AgentSelector` for multi-agent accounts, `SupportBadge` for wildcard users. URL-backed selection: `?account=X&agent=Y`.
+- OnSite Medical + Onboard 360 (`60a232ad-fe25-4fb5-afc2-41cfc8b2937e`) both configured in `/etc/dasharc/accounts.yaml`. Scott verified sign-in + the dashboard renders.
+- Favicon swapped to the rymare leaf PNG from `leads.archie.rymare.com/icon.png`. Verified `https://dashboard.rymare.com/favicon.png` returns 200 and `index.html` references it.
 
 ## What's open
 
-- No active walk. No active code task.
-- **Mnatalis still hasn't accepted the GitHub collaborator invite** (sent earlier this session, invite id `317998003`, expires 7 days from 2026-05-14). Accept page: https://github.com/snovis/dasharc/invitations.
-- **Sign-in flow not yet end-to-end verified** for Mnatalis. The deploy is live and the email is on the allowlist, but no one has actually signed in as `oksklient@gmail.com` and confirmed the dashboard loads. If something fails, first thing to check is whether their Google account email exactly matches (case insensitive on the server, see `api/_lib/verify-token.js`).
-- Remaining onboarding still not done:
-  - If Mnatalis needs `.env` for local dev: share values or have them stand up their own (`VITE_GOOGLE_CLIENT_ID`, `SYNTHFLOW_API_KEY`, etc.). Their email is now in `ALLOWED_EMAILS` locally too.
-  - If they'll deploy/preview on Vercel: add as member in Vercel Project Settings → Members.
-  - Confirm `http://localhost:3000` (or their `vercel dev` port) is in the Google OAuth client's Authorized JavaScript Origins.
+- **Onboard 360 user emails not yet added.** Only Scott + SalesARC wildcard users (Daniel, Nicole, Jason, Jepson) can currently see the Onboard 360 account. Add when Scott provides them: edit `/etc/dasharc/accounts.yaml` on the droplet (or commit to `config/accounts.local.yaml` for local), then `ssh rymare 'systemctl restart dasharc-api'`.
+- **Vercel decom is task #9, intentionally deferred.** Scott wants to keep Vercel running until he's confident in the droplet deploy. When ready: disable auto-deploy on the Vercel project, merge PR #2 to `main`, then delete the project.
+- **CLAUDE.md is stale.** Still describes single-tenant Vercel architecture. Update after Vercel decom so a fresh agent doesn't get confused. Memory has been updated — see `project_dasharc.md`, `reference_dasharc_droplet.md`, `reference_dasharc_gcp.md`.
+- **Legacy `api/` dir is still in tree.** Shared with the Vercel deployment via `api/_lib/verify-token.js` (which the new Express server also imports). Delete after Vercel decom.
+- Next likely action: wait for Scott. When he sends Onboard 360 emails, add them; when he gives the decom go-ahead, do the Vercel teardown sequence.
 
 ## Recent decisions
 
-- 2026-05-14: Triggered `vercel --prod` right after editing env vars instead of waiting for the next code push. Reason: env var changes don't apply to the running deployment until redeploy, and the whole point of editing was to give Mnatalis access now.
+- 2026-05-22: Architecture pivot — one multi-tenant droplet URL replaces N Vercel projects. Triggered by Scott getting requests for more dashboards as more SalesARC clients onboard.
+- 2026-05-22: Account-level access (not agent-level). Adding an agent to an account auto-grants visibility to every user of that account. Sub-account granularity deferred until anyone actually asks for it.
+- 2026-05-22: systemd + git-clone deploy (not Docker). DashARC is Scott's own code; Docker would be self-imposed packaging overhead vs n8n/Rocket Chat which are upstream images.
+- 2026-05-22: Subdomain is `dashboard.rymare.com` (singular). Scott corrected my plural `dashboards`.
+- 2026-05-22: `ALLOWED_EMAILS` env var made optional — YAML config is the authoritative allowlist on the droplet; env-level gate only enforced if set (keeps Vercel deployment working during transition).
 
 ## Open threads (not current focus)
 
-- Local workflow constraint from earlier this session: `main` is protected — feature-branch + PR required for code commits. (`enforce_admins=false` lets Scott bypass when needed, as happened on the prior handoff commit.)
-- **Persistent cache + incremental fetch** (the bigger perf play): TanStack Query `persistQueryClient` + IndexedDB persister + Synthflow `fromDate` deltas. Revisit when first-load-after-clear stops feeling fast or when total records exceed ~5k.
-- **Vercel project rename** (`dasharc-local` → `dasharc`): procedure in `.rsd/docs/2026-04-23-1527-vercel-project-naming-and-rename-procedure.md`. Tied to first-real-client onboarding.
-- Item 9 (deferred from prior walk): silent Google ID token refresh before 1-hour JWT expiry. Still open.
-- Item 15 (deferred from prior walk): delete dead `src/firebase/`, `src/mock/callData.js`, `firebase` dep, `appConfig.useMockData`, `VITE_USE_MOCK_DATA`. ~300 KB bundle shrink + clears `protobufjs` CVE.
-- OnSite Medical agent's anomalous behavior (80% hangup-on-voicemail, truncated transcripts) — real campaign signal, not our bug. Worth flagging to Jason eventually.
+- Selector UX: today the default landing account is whichever appears first in `accounts.yaml`. For SalesARC support, that's OnSite Medical. Could add a per-user `default_account` field if it ever matters; not now.
+- For an "All agents within account" view, charts will need stacked-by-agent rendering — current `aggregateOutcomesByAgent` already segments, but visual treatment may need tuning when accounts get >2 agents.
+- Demo Call button is per-account via `demo_trigger_url` in YAML. Onboard 360 doesn't have one configured yet — button is hidden for that account.
+- Pre-existing 6 npm audit vulns (transitive Firebase → protobufjs) still in tree; resolves when the legacy Firebase code is removed.
+- Bundle size warning (~878 KB) is pre-existing; mostly Firebase + MSAL + Recharts. Address when Firebase comes out.
