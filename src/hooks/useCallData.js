@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useRef, useState, useMemo } from 'react'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { useAuth } from './useAuth'
 
-async function authedFetch(url, idToken) {
-  if (!idToken) throw new Error('Not authenticated')
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } })
+async function authedFetch(url, options) {
+  // Auth rides along in the httpOnly session cookie — same-origin, so just
+  // include credentials.
+  const res = await fetch(url, { credentials: 'include', ...options })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     const err = new Error(body.error || `HTTP ${res.status}`)
@@ -17,12 +18,15 @@ async function authedFetch(url, idToken) {
 
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
-export function useAgents() {
-  const { idToken } = useAuth()
+export function useAgents({ accountId } = {}) {
+  const { isAuthenticated } = useAuth()
+  const url = accountId
+    ? `/api/agents?accountId=${encodeURIComponent(accountId)}`
+    : '/api/agents'
   return useQuery({
-    queryKey: ['agents'],
-    queryFn: async () => (await authedFetch('/api/agents', idToken)).agents ?? [],
-    enabled: !!idToken,
+    queryKey: ['agents', accountId ?? null],
+    queryFn: async () => (await authedFetch(url)).agents ?? [],
+    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 10,
   })
 }
@@ -36,7 +40,7 @@ const PAGE_SIZE = 100
 const MAX_PAGES = 50 // safety cap: 5000 calls per query
 const CONCURRENCY = 8 // parallel page requests after page 1
 
-async function fetchAllCalls({ idToken, agentId, fromDate, toDate, onProgress }) {
+async function fetchAllCalls({ agentId, fromDate, toDate, onProgress }) {
   const fetchPage = (offset) => {
     const params = new URLSearchParams({
       agentId,
@@ -45,7 +49,7 @@ async function fetchAllCalls({ idToken, agentId, fromDate, toDate, onProgress })
     })
     if (fromDate) params.set('fromDate', fromDate)
     if (toDate) params.set('toDate', toDate)
-    return authedFetch(`/api/calls?${params}`, idToken)
+    return authedFetch(`/api/calls?${params}`)
   }
 
   const first = await fetchPage(0)
@@ -87,7 +91,7 @@ async function fetchAllCalls({ idToken, agentId, fromDate, toDate, onProgress })
 }
 
 export function useCalls({ agentId, fromDate, toDate }) {
-  const { idToken } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [progress, setProgress] = useState({ loaded: 0, total: 0 })
   // Keep the latest setter in a ref so the queryFn closure always writes to
   // the current component instance (avoids stale closures across re-renders).
@@ -99,26 +103,73 @@ export function useCalls({ agentId, fromDate, toDate }) {
     queryFn: () => {
       setterRef.current({ loaded: 0, total: 0 })
       return fetchAllCalls({
-        idToken,
         agentId,
         fromDate,
         toDate,
         onProgress: (loaded, total) => setterRef.current({ loaded, total }),
       })
     },
-    enabled: !!idToken && !!agentId,
+    enabled: isAuthenticated && !!agentId,
     staleTime: 1000 * 60 * 2,
   })
 
   return { ...query, progress }
 }
 
+// Multi-agent fan-out: fires useCalls in parallel for each provided agentId
+// and returns the concatenated result. Used when the dashboard's agent
+// selector is set to "All agents" within an account.
+//
+// Errors and pending states aggregate: any pending → pending; any error → error.
+// Progress aggregates loaded/total across all agents so the progress bar
+// reflects the total work in flight.
+export function useCallsForAgents({ agentIds, fromDate, toDate }) {
+  const { isAuthenticated } = useAuth()
+  const [progressByAgent, setProgressByAgent] = useState({})
+
+  const queries = useQueries({
+    queries: (agentIds ?? []).map((agentId) => ({
+      queryKey: ['calls', agentId, fromDate, toDate],
+      queryFn: () =>
+        fetchAllCalls({
+          agentId,
+          fromDate,
+          toDate,
+          onProgress: (loaded, total) =>
+            setProgressByAgent((prev) => ({ ...prev, [agentId]: { loaded, total } })),
+        }),
+      enabled: isAuthenticated && !!agentId,
+      staleTime: 1000 * 60 * 2,
+    })),
+  })
+
+  const isPending = queries.some((q) => q.isPending)
+  const isError = queries.some((q) => q.isError)
+  const error = queries.find((q) => q.isError)?.error
+
+  const calls = useMemo(() => {
+    if (isPending || isError) return []
+    return queries.flatMap((q) => q.data ?? [])
+  }, [queries, isPending, isError])
+
+  const progress = useMemo(() => {
+    let loaded = 0, total = 0
+    for (const p of Object.values(progressByAgent)) {
+      loaded += p.loaded ?? 0
+      total += p.total ?? 0
+    }
+    return { loaded, total }
+  }, [progressByAgent])
+
+  return { data: calls, isPending, isError, error, progress }
+}
+
 export function useCall(callId) {
-  const { idToken } = useAuth()
+  const { isAuthenticated } = useAuth()
   return useQuery({
     queryKey: ['call', callId],
-    queryFn: async () => (await authedFetch(`/api/call?id=${encodeURIComponent(callId)}`, idToken)).call,
-    enabled: !!idToken && !!callId,
+    queryFn: async () => (await authedFetch(`/api/call?id=${encodeURIComponent(callId)}`)).call,
+    enabled: isAuthenticated && !!callId,
     staleTime: 1000 * 60 * 10,
   })
 }

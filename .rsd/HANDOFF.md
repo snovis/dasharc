@@ -1,38 +1,38 @@
 # Handoff
 
-Written: 2026-05-14 10:44 · Context used: unknown
-Branch: main · Last commit: ed7a8aa
+Written: 2026-05-29 14:15 · Context used: ~50%
+Branch: multi-tenant · Last commit: 38753f2
 
 ## What we're working on
 
-Still onboarding Mnatalis (oksklient@gmail.com) as the second developer/user on DashARC. Earlier this session: GitHub collaborator + branch protection. Now: dashboard sign-in access via `ALLOWED_EMAILS`, deployed to prod.
+Maintaining/extending the multi-tenant DashARC dashboard live on the rymare.com DigitalOcean droplet. This session: added two client users, rewrote CLAUDE.md for the droplet topology, shipped persistent cookie-based auth, and fixed the call-detail blank-fields bug. All on branch `multi-tenant` (PR #2), pushed.
+
+Slice: per-user multi-tenant config in `/etc/dasharc/accounts.yaml` (gitignored on droplet); Express API at 127.0.0.1:4100 behind nginx; deploy = `ssh rymare`, `git pull` + restart (+ `npm run build` for frontend changes).
 
 ## What just happened
 
-- Edited local `.env` to append `oksklient@gmail.com` to `ALLOWED_EMAILS`. `.env` is gitignored so it stays uncommitted by design.
-- Replaced Vercel **production** env var `ALLOWED_EMAILS` (via `vercel env rm` + `vercel env add`). Both CLI calls returned success.
-- Ran `vercel --prod` — build succeeded (786 modules, 1.11s), deployed `dpl_HK71sPBPcGkueB2xw2eej9tFmBx2`, status `READY`, aliased to https://dasharc-local.vercel.app. New ALLOWED_EMAILS list is now active on the running deployment.
-- Bundle warning unchanged: 868 KB main chunk — same dead-firebase weight that item 15 cleanup is set to resolve.
+<!-- verified outcomes only -->
+- Added `dan@oneteam360.com` + `dave@oneteam360.com` (scoped to `onboard-360` only) to the droplet's `/etc/dasharc/accounts.yaml`; restart loaded "2 accounts, 12 users" (verified via `/api/health` + journalctl). Backup at `/etc/dasharc/accounts.yaml.bak-20260528-183945`.
+- Shipped server-issued **httpOnly session cookie auth** (replaces sessionStorage). Verified on prod HTTPS: no-auth → 401, valid minted cookie → 200, logout clears cookie. Scott confirmed he stayed logged in after reopening the URL.
+- Fixed **call-detail blank Lead/Phone + "Other" pill**: normalized `/api/call` in `server/routes/call.js` (`name`→`lead_name`, `phone_number_to/from`→`lead_phone_number`, `status`→`call_status`). Verified prod HTTPS returns "Jason Lujan" / real phone / "failed".
+- Rewrote `CLAUDE.md` for the droplet/Express/multi-tenant topology (dual Google+Microsoft auth via `jose`, YAML config, cookie session). Added `.claude/skills/add-dashboard-user/` skill (safe prod user-add runbook).
+- `npm run build` + `npm run lint` clean (no NEW errors; 2 pre-existing lint errors untouched). All committed + pushed; latest commit 38753f2.
 
 ## What's open
 
-- No active walk. No active code task.
-- **Mnatalis still hasn't accepted the GitHub collaborator invite** (sent earlier this session, invite id `317998003`, expires 7 days from 2026-05-14). Accept page: https://github.com/snovis/dasharc/invitations.
-- **Sign-in flow not yet end-to-end verified** for Mnatalis. The deploy is live and the email is on the allowlist, but no one has actually signed in as `oksklient@gmail.com` and confirmed the dashboard loads. If something fails, first thing to check is whether their Google account email exactly matches (case insensitive on the server, see `api/_lib/verify-token.js`).
-- Remaining onboarding still not done:
-  - If Mnatalis needs `.env` for local dev: share values or have them stand up their own (`VITE_GOOGLE_CLIENT_ID`, `SYNTHFLOW_API_KEY`, etc.). Their email is now in `ALLOWED_EMAILS` locally too.
-  - If they'll deploy/preview on Vercel: add as member in Vercel Project Settings → Members.
-  - Confirm `http://localhost:3000` (or their `vercel dev` port) is in the Google OAuth client's Authorized JavaScript Origins.
+- **judge_results not shown on call detail.** Synthflow's `v2/calls/{id}` omits `judge_results` (only the list `v2/calls` carries it — 35 keys on connected/voicemail calls; `failed` calls legitimately have none). Detail page never gets it.
+- Plan written verbatim in `.rsd/docs/2026-05-29-1414-judge-results-plan.md`: enrich `/api/call` server-side via a **date-scoped list lookup** (use the single call's `model_id` + `start_time` date → query `v2/calls` for that day → find by `call_id` → merge `judge_results`), with graceful fallback. ~30–45 min, server-only.
+- Next likely action: **awaiting Scott's go-ahead** to implement that enrichment, then deploy (pull + restart).
 
 ## Recent decisions
 
-- 2026-05-14: Triggered `vercel --prod` right after editing env vars instead of waiting for the next code push. Reason: env var changes don't apply to the running deployment until redeploy, and the whole point of editing was to give Mnatalis access now.
+<!-- provisional -->
+- 2026-05-29: Auth = server-issued HS256 session cookie (httpOnly, SameSite=Lax, 30d default; `SESSION_SECRET` required at boot, set in `/etc/dasharc/env`). Bearer ID token kept as bootstrap/fallback. Why: sessionStorage didn't persist across tabs/restarts and the provider token expired ~1h.
+- 2026-05-29: Call-detail field mismatch fixed **server-side** (normalize in `call.js`), not in the frontend. Why: single source of truth — both call-log and detail pages read the same field names.
+- 2026-05-28: `dan`/`dave` scoped to `onboard-360` **only** (Scott emphatic: "AND NOTHING ELSE") — cross-tenant data isolation.
 
 ## Open threads (not current focus)
 
-- Local workflow constraint from earlier this session: `main` is protected — feature-branch + PR required for code commits. (`enforce_admins=false` lets Scott bypass when needed, as happened on the prior handoff commit.)
-- **Persistent cache + incremental fetch** (the bigger perf play): TanStack Query `persistQueryClient` + IndexedDB persister + Synthflow `fromDate` deltas. Revisit when first-load-after-clear stops feeling fast or when total records exceed ~5k.
-- **Vercel project rename** (`dasharc-local` → `dasharc`): procedure in `.rsd/docs/2026-04-23-1527-vercel-project-naming-and-rename-procedure.md`. Tied to first-real-client onboarding.
-- Item 9 (deferred from prior walk): silent Google ID token refresh before 1-hour JWT expiry. Still open.
-- Item 15 (deferred from prior walk): delete dead `src/firebase/`, `src/mock/callData.js`, `firebase` dep, `appConfig.useMockData`, `VITE_USE_MOCK_DATA`. ~300 KB bundle shrink + clears `protobufjs` CVE.
-- OnSite Medical agent's anomalous behavior (80% hangup-on-voicemail, truncated transcripts) — real campaign signal, not our bug. Worth flagging to Jason eventually.
+- Legacy Vercel `api/` dir + Vercel project still in tree as a rollback path (decom = task 9, pending Scott's confidence in the droplet).
+- Lint was already failing on HEAD before this session (pre-existing `react-hooks/refs` in `useCallData.js` + `react-refresh/only-export-components` in `useAuth.jsx`) — not introduced here, left untouched.
+- `firebase` package + `src/firebase/` + `src/mock/` still present as old transitional dead code (CLAUDE.md "Transitional / Dead Code").

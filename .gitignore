@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 .vercel
+
+# Multi-tenant local config (real customer data — never commit)
+config/accounts.local.yaml
+config/accounts.yaml

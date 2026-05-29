@@ -1,0 +1,46 @@
+# DashARC multi-tenant config
+#
+# accounts: customer organizations. Each owns one or more Synthflow agents.
+# users:    people who can sign in. Listed by email, granted one or more accounts.
+#
+# Special values:
+#   accounts: ["*"]   — user can see every account (support / admin role)
+#   role: support     — shows the "viewing as support" badge in the UI
+#
+# Reload semantics: this file is read at server startup. To pick up changes,
+# restart the dasharc-api service (systemctl restart dasharc-api).
+
+accounts:
+  onsite-medical:
+    name: OnSite Medical
+    branding:
+      company_name: OnSite Medical
+      # primary_color: "#1e40af"   # optional, defaults to slate/blue
+      # logo_url: ...              # optional
+    agents:
+      - id: 0df733c4-a8fb-4d14-a12a-55fc62396bc7
+        name: Dispatch Enrollment Assistant
+    demo_trigger_url: https://salesarcsolutions.app.n8n.cloud/webhook/onsite-demo-trigger
+
+  # example-client:
+  #   name: Example Client
+  #   branding:
+  #     company_name: Example Client
+  #   agents:
+  #     - id: 00000000-0000-0000-0000-000000000000
+  #       name: Voice Agent
+
+users:
+  - email: jason@onsitemedical.com
+    accounts: [onsite-medical]
+
+  - email: scottnovis@gmail.com
+    accounts: ["*"]
+    role: support
+
+  # - email: daniel@salesarc.com
+  #   accounts: ["*"]
+  #   role: support
+  # - email: nicole@salesarc.com
+  #   accounts: ["*"]
+  #   role: support

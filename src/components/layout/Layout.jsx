@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { AccountSelector, SupportBadge } from '../dashboard/ContextSelector'
 import appConfig from '../../config/app'
 
 const NAV_ITEMS = [
@@ -20,9 +21,10 @@ export default function Layout({ children }) {
     <div className="min-h-screen flex bg-slate-50">
       {/* Sidebar */}
       <aside className="w-56 bg-slate-900 flex flex-col shrink-0">
-        <div className="px-5 py-5 border-b border-slate-700">
+        <div className="px-5 py-5 border-b border-slate-700 space-y-2">
           <div className="text-white font-bold text-lg tracking-tight">{appConfig.appName}</div>
-          <div className="text-slate-400 text-xs mt-0.5">{appConfig.companyName}</div>
+          <AccountSelector />
+          <SupportBadge />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">

@@ -1,59 +1,36 @@
-const STORAGE_KEY = 'dasharc.auth'
+// Client-side auth persistence. The real session lives in an httpOnly cookie
+// the server sets (see server/session.js) — the browser can't read it, so we
+// keep only a lightweight copy of the signed-in user here for instant paint on
+// reload. On mount, AuthProvider revalidates against /api/me; if the cookie is
+// gone the stored user is cleared. localStorage (not sessionStorage) so the
+// session survives tab-close, new tabs, and browser restarts.
 
-export function decodeJWT(token) {
+const USER_KEY = 'dasharc.user';
+
+export function readStoredUser() {
   try {
-    const payload = token.split('.')[1]
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const pad = base64.length % 4
-    const padded = pad ? base64 + '='.repeat(4 - pad) : base64
-    return JSON.parse(atob(padded))
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    return user?.email ? user : null;
   } catch {
-    return null
+    return null;
   }
 }
 
-// Microsoft tokens may put the address in `preferred_username` and rarely include `picture`.
-export function userFromPayload(payload) {
-  if (!payload) return null
-  const email = payload.email || payload.preferred_username
-  if (!email) return null
-  return {
-    email,
-    name: payload.name,
-    picture: payload.picture,
-    sub: payload.sub,
-  }
-}
-
-export function readAuthSession() {
-  if (typeof sessionStorage === 'undefined') return null
+export function writeStoredUser(user) {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const { idToken, expiresAt } = JSON.parse(raw)
-    if (!idToken || !expiresAt || Date.now() >= expiresAt) return null
-    const user = userFromPayload(decodeJWT(idToken))
-    if (!user) return null
-    return { idToken, user }
+    if (user?.email) localStorage.setItem(USER_KEY, JSON.stringify(user));
   } catch {
-    return null
+    /* ignore */
   }
+  return user;
 }
 
-export function writeAuthSession(idToken) {
-  if (!idToken) return null
-  const payload = decodeJWT(idToken)
-  const user = userFromPayload(payload)
-  if (!user) return null
-  const expiresAt = (payload.exp || 0) * 1000
+export function clearStoredUser() {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ idToken, expiresAt }))
-    return { idToken, user }
+    localStorage.removeItem(USER_KEY);
   } catch {
-    return null
+    /* ignore */
   }
-}
-
-export function clearAuthSession() {
-  try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
 }
