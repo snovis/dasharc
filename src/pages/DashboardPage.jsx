@@ -8,7 +8,6 @@ import CallsOverTime from '../components/charts/CallsOverTime'
 import Card from '../components/ui/Card'
 import ProgressBar from '../components/ui/ProgressBar'
 import { useAgents, useCalls, useCallsForAgents, periodToDateRange } from '../hooks/useCallData'
-import { useAuth } from '../hooks/useAuth'
 import { useSelection } from '../hooks/useSelection'
 import {
   aggregateOutcomesByAgent,
@@ -237,7 +236,6 @@ function DemoCallButton({ accountId }) {
   const [phone, setPhone] = useState('')
   const [firstName, setFirstName] = useState('')
   const [status, setStatus] = useState(null) // null | 'loading' | 'success' | 'error'
-  const { idToken } = useAuth()
 
   async function handleSubmit() {
     if (!phone) return
@@ -245,10 +243,8 @@ function DemoCallButton({ accountId }) {
     try {
       const res = await fetch(`/api/demo-trigger?accountId=${encodeURIComponent(accountId)}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, first_name: firstName }),
       })
 

@@ -70,7 +70,7 @@ export default function LoginPage() {
     try {
       await ensureMsalReady()
       // Full-page redirect to Microsoft. Returns from this point go through
-      // main.jsx's ensureMsalReady → writeAuthSession bridge.
+      // main.jsx's ensureMsalReady → /api/session bridge.
       await msalInstance.loginRedirect({
         scopes: ['openid', 'profile', 'email'],
         prompt: 'select_account',

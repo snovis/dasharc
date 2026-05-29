@@ -9,13 +9,11 @@ import { useAuth } from './useAuth'
 // restarted — pointless to re-poll during a session. signOut clears the query
 // cache, so the next signed-in user gets a fresh /api/me.
 export function useMe() {
-  const { idToken } = useAuth()
+  const { isAuthenticated } = useAuth()
   return useQuery({
     queryKey: ['me'],
     queryFn: async () => {
-      const res = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      })
+      const res = await fetch('/api/me', { credentials: 'include' })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         const err = new Error(body.error || `HTTP ${res.status}`)
@@ -24,7 +22,7 @@ export function useMe() {
       }
       return body
     },
-    enabled: !!idToken,
+    enabled: isAuthenticated,
     staleTime: Infinity,
   })
 }
