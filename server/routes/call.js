@@ -11,6 +11,21 @@ function sanitize(call) {
   return clean;
 }
 
+// The single-call endpoint (v2/calls/{id}) returns a sparser shape than the
+// list endpoint (v2/calls): no lead_name / lead_phone_number / call_status.
+// Backfill those from the fields it does provide so the detail page renders
+// the same data as the call log instead of blanks + an "Other" pill.
+function normalizeCall(call) {
+  const c = { ...call };
+  if (c.call_status == null && c.status != null) c.call_status = c.status;
+  if (!c.lead_name && c.name) c.lead_name = c.name;
+  if (!c.lead_phone_number) {
+    c.lead_phone_number =
+      c.type_of_call === 'inbound' ? c.phone_number_from : c.phone_number_to;
+  }
+  return c;
+}
+
 // GET /api/call?id=<callId>
 router.get('/', requireAuth, async (req, res) => {
   if (!process.env.SYNTHFLOW_API_KEY) {
@@ -57,7 +72,7 @@ router.get('/', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Call not found' });
     }
 
-    res.json({ call: sanitize(call) });
+    res.json({ call: sanitize(normalizeCall(call)) });
   } catch (err) {
     console.error('call handler error:', err);
     res.status(502).json({ error: `Failed to reach Synthflow: ${err.message}` });
