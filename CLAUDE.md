@@ -42,7 +42,7 @@ Interactive call reporting dashboard for SDR teams on Synthflow. Built and opera
 ```
 
 Every `/api/*` request flow:
-1. Verify `Authorization: Bearer <id_token>` against Google **or** Microsoft JWKs (issuer-detected) via `jose`
+1. Authenticate: prefer the `dasharc_session` httpOnly cookie (our own HS256 JWT, verified with `SESSION_SECRET`); fall back to `Authorization: Bearer <id_token>` against Google **or** Microsoft JWKs (issuer-detected) via `jose`. The Bearer path is what `POST /api/session` uses to bootstrap the cookie.
 2. Resolve the decoded email against the YAML `users` list (`resolveUserAccess`) → **403** if not listed. (`ALLOWED_EMAILS` env is an *optional* extra gate, left unset on the droplet — the YAML is the authoritative allowlist.)
 3. For per-agent endpoints: verify `agentId` ∈ the user's `access.agentIds`. For per-account endpoints (demo trigger): verify `accountId` ∈ the user's accounts.
 4. Forward to Synthflow with the server-side `SYNTHFLOW_API_KEY`
@@ -63,6 +63,8 @@ See `.env.example`. Current list:
 - `VITE_GOOGLE_CLIENT_ID` — Google OAuth 2.0 Web Client ID (browser-facing)
 - `VITE_MICROSOFT_CLIENT_ID` — Azure app (client) ID; presence enables Microsoft sign-in
 - `SYNTHFLOW_API_KEY` — server-side only, **never** prefix with `VITE_`
+- `SESSION_SECRET` — server-side only; signs the httpOnly session cookie (≥32 chars). **Required — the server refuses to boot without it.**
+- `SESSION_TTL_DAYS` — optional, session cookie lifetime (default `30`)
 - `ACCOUNTS_CONFIG_PATH` — absolute path to the YAML config (droplet: `/etc/dasharc/accounts.yaml`; defaults to `config/accounts.local.yaml` when unset)
 - `PORT` — Express port (default `4100`)
 - `ALLOWED_EMAILS` — *optional/legacy* coarse env gate; unset on the droplet
@@ -72,10 +74,12 @@ See `.env.example`. Current list:
 
 ```
 server/
-  index.js               # Express app: mounts routers, /api/health, listen :4100
+  index.js               # Express app: trust proxy, mounts routers, /api/health, listen :4100
   config.js              # loadConfig() parses YAML → accounts/users; resolveUserAccess(email)
-  auth.js                # requireAuth middleware: verifyRequest + resolveUserAccess
+  session.js             # mint/verify HS256 session JWT + httpOnly cookie helpers
+  auth.js                # requireAuth: session cookie first, Bearer ID token fallback + resolveUserAccess
   routes/
+    session.js           # POST /api/session (mint cookie), POST /api/logout (clear cookie)
     me.js                # GET /api/me — user identity + accounts/agents/branding (drives selectors)
     agents.js            # GET /api/agents — agents the user can see
     calls.js             # GET /api/calls?agentId=&fromDate=&toDate=
@@ -115,11 +119,11 @@ Browser ─(Bearer id_token)─→ /api/* (Express on droplet) ─(API key)─�
 On login the frontend calls `/api/me` to learn the user's accounts/agents/branding, then renders the account selector (collapses to a label when only 1 account) and the page-header agent selector (only when >1 agent). Every render that needs fresh data fires Synthflow calls through the proxy. TanStack Query caches results (2 min for calls, 10 min for agents/single-call detail). Synthflow outage → dashboard shows a "failed to load" banner.
 
 ## Auth
-- **Google Sign-In** via `google.accounts.id` (script in `index.html`) and **Microsoft** via `@azure/msal-browser`.
-- The callback hands the ID token to `useAuth().signIn(token)`, which decodes the JWT for `{email, name, picture}` and persists to `sessionStorage` (survives reloads, auto-expires on JWT `exp`).
-- API calls attach `Authorization: Bearer <idToken>`; the server verifies via `api/_lib/verify-token.js`. Issuer is auto-detected: Google (`accounts.google.com`) or Microsoft v2 (`login.microsoftonline.com/<tenant>/v2.0`).
-- Authorization is the YAML `users` list: an unlisted email gets a **403** from `requireAuth`.
-- **Silent refresh before 1hr expiry is deferred** (known rough edge). Users hitting an expired token get a load error + reload-to-reauth. See `.rsd/walks/` for the deferral notes.
+- **Sign-in:** **Google** via `google.accounts.id` (script in `index.html`) and **Microsoft** via `@azure/msal-browser`. The provider returns an ID token to the browser.
+- **Session exchange:** `useAuth().signIn(idToken)` (and the MSAL bridge in `main.jsx`) POSTs the ID token to `POST /api/session`. The server verifies it (issuer auto-detected: Google `accounts.google.com` / Microsoft v2 `login.microsoftonline.com/<tenant>/v2.0`) against the YAML `users` allowlist, then mints its **own** HS256 JWT and sets it as a `dasharc_session` cookie — `httpOnly`, `SameSite=Lax`, `Secure` (behind nginx), 30-day default.
+- **Subsequent requests:** the frontend fetches with `credentials: 'include'` (no Bearer header); `requireAuth` verifies the cookie. On load, `AuthProvider` revalidates against `/api/me`. A lightweight copy of the user is kept in `localStorage` only for instant paint — the cookie is the real session, so it survives tab-close, new tabs, and browser restarts.
+- **Authorization** is the YAML `users` list: an unlisted email gets a **403**; an expired/invalid cookie gets a **401** → the client bounces to `/login`.
+- The old ~1h re-login problem (token in `sessionStorage`, no refresh) is **resolved** by this server session. To force everyone to re-auth, rotate `SESSION_SECRET` and restart.
 
 ## Adding / Managing Users
 
