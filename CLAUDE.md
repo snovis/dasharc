@@ -220,8 +220,6 @@ Any user with access to the account can trigger its demo calls. No further role 
 ## Transitional / Dead Code
 
 Awaiting deletion in a future cleanup:
-- `src/firebase/` — old Firestore + Firebase Auth helpers, unreferenced
 - `src/mock/callData.js` — old mock data, unreferenced
-- `firebase` in `package.json` dependencies (transitive `protobufjs` CVE will self-resolve on removal)
 - `appConfig.useMockData` in `src/config/app.js` + `VITE_USE_MOCK_DATA` — defined/read but no longer wired to anything
 - Legacy Vercel `api/*.js` handlers (see Deployment note) — remove after Vercel decommission
