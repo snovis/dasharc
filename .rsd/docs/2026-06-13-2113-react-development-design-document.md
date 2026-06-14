@@ -120,11 +120,12 @@ The developer's entire day-to-day — and all static-app provisioning — is ful
 ### Honest notes
 - **Builds run on the droplet** alongside n8n/RocketChat. dasharc already does this fine; React builds are bursty but short. If a heavy app ever strains the box, we move that app's build to GitHub Actions (artifact-only) without changing anything else.
 - **Backend isolation:** a dev's backend code runs as the `deploy` user — same trust level dasharc's own server runs at today. Fine for a trusted dev. If that ever changes, rootless Docker per backend is an additive swap, not a redo.
-- **Private repos** need a read-only deploy key per repo (planned for; harmless if repos are public).
+- **Private repos (confirmed):** each repo gets a **read-only deploy key** on the droplet for pulls. This is separate from the developer's push access.
+- **Developer access model (confirmed):** the developer is added as a **GitHub contributor** on each private repo, giving them check-in/push rights — entirely within GitHub, no droplet access. The droplet only ever *reads* (read-only deploy key). Two distinct credentials: dev write key (GitHub-side) vs. droplet read key (per-repo deploy key).
 
 ---
 
 ### Open items / next steps
-- **Repo visibility:** private (needs deploy keys) or public (no pull auth)? — still to confirm.
+- **Repo visibility:** ✅ Private. Droplet pulls via per-repo read-only deploy key. Developer is a GitHub contributor (push rights) on each repo.
 - **Execution path:** (A) save design doc first [this doc], then execute in reviewed steps; or (B) start building now from the one-time root setup, pausing for confirmation between each prod-affecting step.
 - **Webhook endpoint host:** `hooks.apps.rymare.com` — covered by the `*.apps.rymare.com` wildcard cert, so no extra cert.
