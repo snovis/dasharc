@@ -73,7 +73,7 @@ export function getConfig() {
  * Given an email, return the user's resolved access:
  *   {
  *     email, role, isWildcard,
- *     accounts: [{ id, name, branding, agents: [{id, name}], demo_trigger_url }],
+ *     accounts: [{ id, name, branding, agents, demo_trigger_url, rvm_campaign }],
  *     agentIds: Set<string>,                  // every agent the user can see
  *     accountByAgentId: Map<string, string>,  // agent ID → owning account ID
  *   }
@@ -93,6 +93,13 @@ export function resolveUserAccess(email) {
       branding: acct.branding ?? {},
       agents: (acct.agents ?? []).map((a) => ({ id: a.id, name: a.name })),
       demo_trigger_url: acct.demo_trigger_url ?? null,
+      rvm_campaign: acct.rvm_campaign
+        ? {
+            name: acct.rvm_campaign.name ?? null,
+            subtitle: acct.rvm_campaign.subtitle ?? null,
+            button_label: acct.rvm_campaign.button_label ?? null,
+          }
+        : null,
     };
   });
 

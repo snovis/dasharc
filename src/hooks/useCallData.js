@@ -187,3 +187,56 @@ export function periodToDateRange(period, now = new Date()) {
   return { fromDate, toDate }
 }
 
+// ─── Dallas RVM Calls ─────────────────────────────────────────────────────────
+
+async function fetchDallasCalls({ accountId, fromDate, toDate, onProgress }) {
+  const params = new URLSearchParams({ accountId })
+  if (fromDate) params.set('fromDate', fromDate)
+  if (toDate) params.set('toDate', toDate)
+
+  const first = await authedFetch(`/api/dallas-calls?${params}`)
+  const firstCalls = first.calls ?? []
+  onProgress?.(firstCalls.length, 0)
+
+  if (!first.nextPageToken) return firstCalls
+
+  const allCalls = [...firstCalls]
+  let nextPageToken = first.nextPageToken
+  let pagesLoaded = 1
+
+  while (nextPageToken && pagesLoaded < MAX_PAGES) {
+    const pageParams = new URLSearchParams({ accountId, pageToken: nextPageToken })
+    if (fromDate) pageParams.set('fromDate', fromDate)
+    if (toDate) pageParams.set('toDate', toDate)
+    const page = await authedFetch(`/api/dallas-calls?${pageParams}`)
+    const pageCalls = page.calls ?? []
+    allCalls.push(...pageCalls)
+    onProgress?.(allCalls.length, 0)
+    nextPageToken = page.nextPageToken ?? null
+    pagesLoaded++
+  }
+
+  return allCalls
+}
+
+export function useDallasCalls({ accountId, fromDate, toDate }) {
+  const { isAuthenticated } = useAuth()
+  const [progress, setProgress] = useState({ loaded: 0, total: 0 })
+
+  const query = useQuery({
+    queryKey: ['dallas-calls', accountId, fromDate, toDate],
+    queryFn: () => {
+      setProgress({ loaded: 0, total: 0 })
+      return fetchDallasCalls({
+        accountId,
+        fromDate,
+        toDate,
+        onProgress: (loaded, total) => setProgress({ loaded, total }),
+      })
+    },
+    enabled: isAuthenticated && !!accountId,
+    staleTime: 1000 * 60 * 2,
+  })
+
+  return { ...query, progress }
+}
