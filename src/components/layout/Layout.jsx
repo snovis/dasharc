@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useSelection } from '../../hooks/useSelection'
 import { AccountSelector, SupportBadge } from '../dashboard/ContextSelector'
 import appConfig from '../../config/app'
 
@@ -10,6 +11,7 @@ const NAV_ITEMS = [
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
+  const { accountId } = useSelection()
   const navigate = useNavigate()
 
   function handleSignOut() {
@@ -59,7 +61,7 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main key={accountId ?? 'no-account'} className="flex-1 overflow-auto">
         {children}
       </main>
     </div>

@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMe } from './useMe'
 
 // Drives the "what am I looking at right now" state — selected account and,
@@ -10,9 +10,10 @@ import { useMe } from './useMe'
 // has >1 agent, otherwise the single agent's id.
 export function useSelection() {
   const { data: me } = useMe()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const accounts = me?.accounts ?? []
+  const accounts = useMemo(() => me?.accounts ?? [], [me?.accounts])
   const defaultAccountId = accounts[0]?.id ?? null
 
   const urlAccountId = searchParams.get('account')
@@ -22,7 +23,7 @@ export function useSelection() {
   }, [urlAccountId, accounts, defaultAccountId])
 
   const account = accounts.find((a) => a.id === accountId) ?? null
-  const agents = account?.agents ?? []
+  const agents = useMemo(() => account?.agents ?? [], [account?.agents])
 
   // Default agent: if only one agent, default to it; if multiple, default to "all".
   const defaultAgentId = agents.length === 1 ? agents[0].id : 'all'
@@ -35,16 +36,18 @@ export function useSelection() {
 
   const setAccountId = useCallback(
     (nextAccountId) => {
-      setSearchParams((prev) => {
-        const sp = new URLSearchParams(prev)
-        if (!nextAccountId || nextAccountId === defaultAccountId) sp.delete('account')
-        else sp.set('account', nextAccountId)
-        // Reset agent when switching accounts — the old agent ID isn't valid here.
-        sp.delete('agent')
-        return sp
-      })
+      const sp = new URLSearchParams()
+      if (nextAccountId && nextAccountId !== defaultAccountId) {
+        sp.set('account', nextAccountId)
+      }
+
+      // Account changes are a context switch, not an in-page filter change.
+      // Return to a clean dashboard URL so account-specific routes, agents,
+      // filters, modals, and other page-local state cannot carry across tenants.
+      const query = sp.toString()
+      navigate({ pathname: '/', search: query ? `?${query}` : '' })
     },
-    [setSearchParams, defaultAccountId],
+    [navigate, defaultAccountId],
   )
 
   const setAgentId = useCallback(
