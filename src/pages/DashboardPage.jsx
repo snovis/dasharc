@@ -101,6 +101,14 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <AgentSelector />
+            {account?.rvm_campaign && (
+              <button
+                onClick={() => navigate('/dallas-rvm')}
+                className="px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded-lg hover:bg-slate-800"
+              >
+                {account.rvm_campaign.button_label || 'RVM Calls'}
+              </button>
+            )}
             {account?.demo_trigger_url && <DemoCallButton accountId={accountId} />}
             <FilterBar filter={filter} onChange={setFilter} />
           </div>
@@ -134,14 +142,29 @@ export default function DashboardPage() {
         </div>
 
         {!isAllAgents && selectedAgent && (
-          <Card title={selectedAgent.name} subtitle="Open call log">
-            <button
-              onClick={() => navigate(`/agents/${selectedAgent.id}`)}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              View all calls →
-            </button>
-          </Card>
+          <div className={`grid grid-cols-1 gap-4 ${account?.rvm_campaign ? 'md:grid-cols-2' : ''}`}>
+            <Card title={selectedAgent.name} subtitle="Open call log">
+              <button
+                onClick={() => navigate(`/agents/${selectedAgent.id}`)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                View all calls →
+              </button>
+            </Card>
+            {account?.rvm_campaign && (
+              <Card
+                title={account.rvm_campaign.name || 'RVM Campaign'}
+                subtitle={account.rvm_campaign.subtitle || 'Ringless voicemail call history'}
+              >
+                <button
+                  onClick={() => navigate('/dallas-rvm')}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  View RVM calls →
+                </button>
+              </Card>
+            )}
+          </div>
         )}
       </div>
     </Layout>

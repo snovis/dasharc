@@ -7,6 +7,7 @@ import agentsRouter from './routes/agents.js';
 import callsRouter from './routes/calls.js';
 import callRouter from './routes/call.js';
 import demoTriggerRouter from './routes/demoTrigger.js';
+import dallasCallsRouter from './routes/dallasCalls.js';
 
 const PORT = Number(process.env.PORT) || 4100;
 
@@ -37,6 +38,7 @@ app.use('/api/agents', agentsRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/call', callRouter);
 app.use('/api/demo-trigger', demoTriggerRouter);
+app.use('/api/dallas-calls', dallasCallsRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, accounts: cfg.accountIds.length, users: cfg.users.length });

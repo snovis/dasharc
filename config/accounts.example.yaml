@@ -21,6 +21,12 @@ accounts:
       - id: 0df733c4-a8fb-4d14-a12a-55fc62396bc7
         name: Dispatch Enrollment Assistant
     demo_trigger_url: https://salesarcsolutions.app.n8n.cloud/webhook/onsite-demo-trigger
+    # Optional Twilio RVM call-history page. Credentials and outbound number
+    # remain server-side in TWILIO_* / DALLAS_TWILIO_FROM_NUMBER env vars.
+    # rvm_campaign:
+    #   name: Dallas RVM Campaign
+    #   subtitle: TX Cold Outreach · Ringless Voicemail
+    #   button_label: Dallas RVM
 
   # example-client:
   #   name: Example Client
