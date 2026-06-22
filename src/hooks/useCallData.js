@@ -136,3 +136,60 @@ export function periodToDateRange(period, now = new Date()) {
   return { fromDate, toDate }
 }
 
+// ─── Dallas RVM Calls ─────────────────────────────────────────────────────────
+
+async function fetchDallasCalls({ idToken, fromDate, toDate, onProgress }) {
+  const params = new URLSearchParams({ limit: '100' })
+  if (fromDate) params.set('fromDate', fromDate)
+  if (toDate) params.set('toDate', toDate)
+
+  const first = await authedFetch(`/api/dallas-calls?${params}`, idToken)
+  const firstCalls = first.calls ?? []
+  onProgress?.(firstCalls.length, firstCalls.length)
+
+  if (!first.nextPageUri) return firstCalls
+
+  const allCalls = [...firstCalls]
+  let nextPageUri = first.nextPageUri
+
+  while (nextPageUri) {
+    const match = nextPageUri.match(/PageToken=([^&]+)/)
+    if (!match) break
+    const pageToken = match[1]
+    const pageParams = new URLSearchParams({ limit: '100', pageToken })
+    if (fromDate) pageParams.set('fromDate', fromDate)
+    if (toDate) pageParams.set('toDate', toDate)
+    const page = await authedFetch(`/api/dallas-calls?${pageParams}`, idToken)
+    const pageCalls = page.calls ?? []
+    allCalls.push(...pageCalls)
+    onProgress?.(allCalls.length, allCalls.length)
+    nextPageUri = page.nextPageUri ?? null
+  }
+
+  return allCalls
+}
+
+export function useDallasCalls({ fromDate, toDate }) {
+  const { idToken } = useAuth()
+  const [progress, setProgress] = useState({ loaded: 0, total: 0 })
+  const setterRef = useRef(setProgress)
+  setterRef.current = setProgress
+
+  const query = useQuery({
+    queryKey: ['dallas-calls', fromDate, toDate],
+    queryFn: () => {
+      setterRef.current({ loaded: 0, total: 0 })
+      return fetchDallasCalls({
+        idToken,
+        fromDate,
+        toDate,
+        onProgress: (loaded, total) => setterRef.current({ loaded, total }),
+      })
+    },
+    enabled: !!idToken,
+    staleTime: 1000 * 60 * 2,
+  })
+
+  return { ...query, progress }
+}
+

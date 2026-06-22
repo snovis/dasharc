@@ -71,6 +71,12 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/dallas-rvm')}
+              className="px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded-lg hover:bg-slate-800 cursor-pointer"
+            >
+              Dallas RVM
+            </button>
             <DemoCallButton />
             <FilterBar filter={filter} onChange={setFilter} />
           </div>
@@ -104,14 +110,24 @@ export default function DashboardPage() {
         </div>
 
         {agents.length === 1 && primaryAgent && (
-          <Card title={`${primaryAgent.name}`} subtitle="Open call log">
-            <button
-              onClick={() => navigate(`/agents/${primaryAgent.model_id}`)}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              View all calls →
-            </button>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card title={`${primaryAgent.name}`} subtitle="Open call log">
+              <button
+                onClick={() => navigate(`/agents/${primaryAgent.model_id}`)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                View all calls →
+              </button>
+            </Card>
+            <Card title="Dallas RVM Campaign" subtitle="TX Cold Outreach · Ringless Voicemail">
+              <button
+                onClick={() => navigate('/dallas-rvm')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                View RVM calls →
+              </button>
+            </Card>
+          </div>
         )}
       </div>
     </Layout>
