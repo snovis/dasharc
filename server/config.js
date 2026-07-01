@@ -93,6 +93,7 @@ export function resolveUserAccess(email) {
       branding: acct.branding ?? {},
       agents: (acct.agents ?? []).map((a) => ({ id: a.id, name: a.name })),
       demo_trigger_url: acct.demo_trigger_url ?? null,
+      rvm_campaign: acct.rvm_campaign ?? null,
     };
   });
 

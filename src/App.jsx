@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import AgentDetailPage from './pages/AgentDetailPage'
 import CallDetailPage from './pages/CallDetailPage'
+import DallasRvmPage from './pages/DallasRvmPage'
 
 const queryClient = new QueryClient()
 
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/agents/:agentId" element={<ProtectedRoute><AgentDetailPage /></ProtectedRoute>} />
             <Route path="/calls/:callId" element={<ProtectedRoute><CallDetailPage /></ProtectedRoute>} />
+            <Route path="/dallas-rvm" element={<ProtectedRoute><DallasRvmPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
